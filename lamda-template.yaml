@@ -1,0 +1,400 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Lambda Functions for Task Management System Backend
+
+Parameters:
+  UserPoolId:
+    Type: String
+    Description: Cognito User Pool ID
+  UserPoolClientId:
+    Type: String
+    Description: Cognito User Pool Client ID
+  TasksTableName:
+    Type: String
+    Description: DynamoDB Tasks Table Name
+  TaskAssignmentQueueArn:
+    Type: String
+    Description: SQS Task Assignment Queue ARN
+  TaskAssignmentNotificationTopicArn:
+    Type: String
+    Description: SNS Task Assignment Notification Topic ARN
+
+Globals:
+  Function:
+    Runtime: java21
+    MemorySize: 512
+    Timeout: 30
+    CodeUri: TaskManager/
+  Api:
+    Auth:
+      DefaultAuthorizer: CognitoAuthorizer
+      Authorizers:
+        CognitoAuthorizer:
+          UserPoolArn: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
+
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - cognito-idp:*
+                Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
+              - Effect: Allow
+                Action:
+                  - dynamodb:*
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TasksTableName}"
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !Ref TaskAssignmentQueueArn
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref TaskAssignmentNotificationTopicArn
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  SignUpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SignUpFunction
+      Handler: auth.SignUpHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
+          USER_POOL_ID: !Ref UserPoolId
+      Events:
+        SignUpApi:
+          Type: Api
+          Properties:
+            Path: /signup
+            Method: POST
+            Auth:
+              Authorizer: NONE
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  SignInFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SignInFunction
+      Handler: auth.SignInHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
+      Events:
+        SignInApi:
+          Type: Api
+          Properties:
+            Path: /signin
+            Method: POST
+            Auth:
+              Authorizer: NONE
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  ConfirmSignUpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ConfirmSignUpFunction
+      Handler: auth.ConfirmSignUpHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
+      Events:
+        ConfirmSignUpApi:
+          Type: Api
+          Properties:
+            Path: /confirm-signup
+            Method: POST
+            Auth:
+              Authorizer: NONE
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  ResendConfirmationCodeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ResendConfirmationCodeFunction
+      Handler: auth.ResendConfirmationCodeHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
+      Events:
+        ResendConfirmationCodeApi:
+          Type: Api
+          Properties:
+            Path: /resend-confirmation-code
+            Method: POST
+            Auth:
+              Authorizer: NONE
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  ChangePasswordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ChangePasswordFunction
+      Handler: auth.ChangePasswordHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
+      Events:
+        ChangePasswordApi:
+          Type: Api
+          Properties:
+            Path: /change-password
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  ForgotPasswordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ForgotPasswordFunction
+      Handler: auth.ForgotPasswordHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
+      Events:
+        ForgotPasswordApi:
+          Type: Api
+          Properties:
+            Path: /forgot-password
+            Method: POST
+            Auth:
+              Authorizer: NONE
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  ConfirmForgotPasswordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ConfirmForgotPasswordFunction
+      Handler: auth.ConfirmForgotPasswordHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
+      Events:
+        ConfirmForgotPasswordApi:
+          Type: Api
+          Properties:
+            Path: /confirm-forgot-password
+            Method: POST
+            Auth:
+              Authorizer: NONE
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  SignOutFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SignOutFunction
+      Handler: auth.SignOutHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
+      Events:
+        SignOutApi:
+          Type: Api
+          Properties:
+            Path: /signout
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  RefreshTokenFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: RefreshTokenFunction
+      Handler: auth.RefreshTokenHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
+      Events:
+        RefreshTokenApi:
+          Type: Api
+          Properties:
+            Path: /refresh-token
+            Method: POST
+            Auth:
+              Authorizer: NONE
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  ProtectedFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ProtectedFunction
+      Handler: auth.ProtectedHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        ProtectedApi:
+          Type: Api
+          Properties:
+            Path: /protected
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  AdminCreateUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: AdminCreateUserFunction
+      Handler: auth.AdminCreateUserHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPoolId
+      Events:
+        AdminCreateUserApi:
+          Type: Api
+          Properties:
+            Path: /admin/user
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  CreateTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: helloworld.CreateTaskHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTableName
+          TASK_ASSIGNMENT_QUEUE: !Ref TaskAssignmentQueueArn
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /tasks
+            Method: POST
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  ProcessTaskAssignmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: helloworld.ProcessTaskAssignmentHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref TaskAssignmentNotificationTopicArn
+      Events:
+        SqsEvent:
+          Type: SQS
+          Properties:
+            Queue: !Ref TaskAssignmentQueueArn
+            BatchSize: 10
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  GetTasksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: helloworld.GetTasks::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TASK_TABLE_NAME: !Ref TasksTableName
+      Events:
+        GetTasksApi:
+          Type: Api
+          Properties:
+            Path: /tasks
+            Method: GET
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  GetTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: helloworld.GetTask::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TASK_TABLE_NAME: !Ref TasksTableName
+      Events:
+        GetTask:
+          Type: Api
+          Properties:
+            Path: /tasks/{taskId}
+            Method: GET
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  GetTaskAnalyticsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: helloworld.GetTaskAnalytics::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TASK_TABLE_NAME: !Ref TasksTableName
+      Events:
+        GetTasksApi:
+          Type: Api
+          Properties:
+            Path: /tasks/analytics
+            Method: GET
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
