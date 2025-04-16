@@ -2,6 +2,16 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Task Management System Backend
 
+Globals:
+  Function:
+    Timeout: 20
+    MemorySize: 512
+    Runtime: java21
+    Architectures:
+      - x86_64
+    LoggingConfig:
+      LogFormat: JSON
+
 Resources:
   # Cognito User Pool
   UserPool:
@@ -739,11 +749,11 @@ Resources:
   GetTasksFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: TaskManager/
-      Handler: helloworld.GetTasks::handleRequest
+      CodeUri: TaskManager
+      Handler: taskmanager.handlers.task.GetTasks::handleRequest
       Environment:
         Variables:
-          TASK_TABLE_NAME: !Ref TaskTable
+          TASK_TABLE_NAME: !Ref TasksTable
       Events:
         GetTasksApi:
           Type: Api
@@ -752,16 +762,16 @@ Resources:
             Method: get
       Policies:
         - DynamoDBReadPolicy:
-            TableName: !Ref TaskTable
+            TableName: !Ref TasksTable
 
   GetTaskFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: TaskManager/
-      Handler: helloworld.GetTask::handleRequest
+      CodeUri: TaskManager
+      Handler: taskmanager.handlers.task.GetTask::handleRequest
       Environment:
         Variables:
-          TASK_TABLE_NAME: !Ref TaskTable
+          TASK_TABLE_NAME: !Ref TasksTable
       Events:
         GetTask:
           Type: Api
@@ -770,16 +780,16 @@ Resources:
             Method: get
       Policies:
         - DynamoDBReadPolicy:
-            TableName: !Ref TaskTable
+            TableName: !Ref TasksTable
 
   GetTaskAnalyticsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: TaskManager/
-      Handler: helloworld.GetTaskAnalytics::handleRequest
+      CodeUri: TaskManager
+      Handler: taskmanager.handlers.task.GetTaskAnalytics::handleRequest
       Environment:
         Variables:
-          TASK_TABLE_NAME: !Ref TaskTable
+          TASK_TABLE_NAME: !Ref TasksTable
       Events:
         GetTasksApi:
           Type: Api
@@ -788,7 +798,7 @@ Resources:
             Method: get
       Policies:
         - DynamoDBReadPolicy:
-            TableName: !Ref TaskTable
+            TableName: !Ref TasksTable
 #
 #  OnboardUserFunction:
 #    Type: AWS::Serverless::Function
