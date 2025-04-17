@@ -2,48 +2,17 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Task Management System Backend - Main Template
 
-Parameters:
-  UserPoolId:
-    Type: String
-    Description: Cognito User Pool ID
-  UserPoolClientId:
-    Type: String
-    Description: Cognito User Pool Client ID
-  TasksTableName:
-    Type: String
-    Description: DynamoDB Tasks Table Name
-  TaskAssignmentQueueArn:
-    Type: String
-    Description: SQS Task Assignment Queue ARN
-  TaskAssignmentNotificationTopicArn:
-    Type: String
-    Description: SNS Task Assignment Notification Topic ARN
-  TaskDeadlineNotificationTopicArn:
-    Type: String
-    Description: SNS Task Deadline Notification Topic ARN
-  ClosedTasksNotificationTopicArn:
-    Type: String
-    Description: SNS Closed Tasks Notification Topic ARN
-  TaskCompleteNotificationTopicArn:
-    Type: String
-    Description: SNS Task Complete Notification Topic ARN
-
 Resources:
   CognitoStack:
     Type: AWS::CloudFormation::Stack
     Properties:
       TemplateURL: cognito-template.yaml
+      Parameters:
+        TeamMemberSubscriptionStepFunctionArn: !GetAtt StepFunctionsStack.Outputs.TeamMemberSubscriptionStepFunctionArn
+        TaskAssignmentNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentNotificationTopicArn  # Changed from TaskAssignmentNotificationTopic
       Tags:
         - Key: Component
           Value: Cognito
-
-  DynamoDBStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: dynamodb-template.yaml
-      Tags:
-        - Key: Component
-          Value: DynamoDB
 
   SnsSqsStack:
     Type: AWS::CloudFormation::Stack
@@ -58,31 +27,14 @@ Resources:
     Properties:
       TemplateURL: step-functions-template.yaml
       Parameters:
-        TasksTableName: !GetAtt DynamoDBStack.Outputs.TasksTableName
         TaskAssignmentNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentNotificationTopicArn
         TaskDeadlineNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskDeadlineNotificationTopicArn
         ClosedTasksNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.ClosedTasksNotificationTopicArn
-        TaskCompleteNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskCompleteNotificationTopicArn
       Tags:
         - Key: Component
           Value: StepFunctions
 
-  LambdaStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: lambda-template.yaml
-      Parameters:
-        UserPoolId: !GetAtt CognitoStack.Outputs.UserPoolId
-        UserPoolClientId: !GetAtt CognitoStack.Outputs.UserPoolClientId
-        TasksTableName: !GetAtt DynamoDBStack.Outputs.TasksTableName
-        TaskAssignmentQueueArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentQueueArn
-        TaskAssignmentNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentNotificationTopicArn
-      Tags:
-        - Key: Component
-          Value: Lambda
-
 Outputs:
-  ApiUrl:
+  ApiUrlCognito:
     Description: API Gateway endpoint URL
-    Value: !GetAtt LambdaStack.Outputs.ApiUrl
-
+    Value: !GetAtt CognitoStack.Outputs.ApiUrl

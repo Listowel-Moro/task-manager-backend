@@ -4,7 +4,6 @@
   <component name="MavenProjectsManager">
     <option name="originalFiles">
       <list>
-        <option value="$PROJECT_DIR$/HelloWorldFunction/pom.xml" />
         <option value="$PROJECT_DIR$/TaskManager/pom.xml" />
       </list>
     </option>
