@@ -2,9 +2,9 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Step Functions Resources for Task Management System Backend
 
 Parameters:
-  TasksTableName:
-    Type: String
-    Description: DynamoDB Tasks Table Name
+#  TasksTableName:
+#    Type: String
+#    Description: DynamoDB Tasks Table Name
   TaskAssignmentNotificationTopicArn:
     Type: String
     Description: SNS Task Assignment Notification Topic ARN
@@ -14,9 +14,9 @@ Parameters:
   ClosedTasksNotificationTopicArn:
     Type: String
     Description: SNS Closed Tasks Notification Topic ARN
-  TaskCompleteNotificationTopicArn:
-    Type: String
-    Description: SNS Task Complete Notification Topic ARN
+#  TaskCompleteNotificationTopicArn:
+#    Type: String
+#    Description: SNS Task Complete Notification Topic ARN
 
 Resources:
   StepFunctionRole:
@@ -118,134 +118,134 @@ Resources:
         - Key: Component
           Value: StepFunctions
 
-  AdminSubscriptionStepFunction:
-    Type: AWS::StepFunctions::StateMachine
-    Properties:
-      DefinitionString: !Sub |
-        {
-          "StartAt": "ParallelSubscribe",
-          "States": {
-            "ParallelSubscribe": {
-              "Type": "Parallel",
-              "Branches": [
-                {
-                  "StartAt": "SubscribeClosed",
-                  "States": {
-                    "SubscribeClosed": {
-                      "Type": "Task",
-                      "Resource": "arn:aws:states:::aws-sdk:sns:subscribe",
-                      "Parameters": {
-                        "TopicArn": "${ClosedTasksNotificationTopicArn}",
-                        "Protocol": "email",
-                        "Endpoint.$": "$.email",
-                        "Attributes": {
-                          "FilterPolicy": "{\"for_admin\": [true]}"
-                        }
-                      },
-                      "End": true
-                    }
-                  }
-                },
-                {
-                  "StartAt": "SubscribeComplete",
-                  "States": {
-                    "SubscribeComplete": {
-                      "Type": "Task",
-                      "Resource": "arn:aws:states:::aws-sdk:sns:subscribe",
-                      "Parameters": {
-                        "TopicArn": "${TaskCompleteNotificationTopicArn}",
-                        "Protocol": "email",
-                        "Endpoint.$": "$.email"
-                      },
-                      "End": true
-                    }
-                  }
-                }
-              ],
-              "End": true
-            }
-          }
-        }
-      RoleArn: !GetAtt StepFunctionRole.Arn
-      Tags:
-        - Key: Component
-          Value: StepFunctions
-
-  TaskDeadlineStepFunction:
-    Type: AWS::StepFunctions::StateMachine
-    Properties:
-      DefinitionString: !Sub |
-        {
-          "StartAt": "ParallelActions",
-          "States": {
-            "ParallelActions": {
-              "Type": "Parallel",
-              "Branches": [
-                {
-                  "StartAt": "UpdateTaskStatus",
-                  "States": {
-                    "UpdateTaskStatus": {
-                      "Type": "Task",
-                      "Resource": "arn:aws:states:::dynamodb:updateItem",
-                      "Parameters": {
-                        "TableName": "${TasksTableName}",
-                        "Key": {
-                          "TaskID": {
-                            "S.$": "$.task_id"
-                          }
-                        },
-                        "UpdateExpression": "SET #status = :expired",
-                        "ExpressionAttributeNames": {
-                          "#status": "Status"
-                        },
-                        "ExpressionAttributeValues": {
-                          ":expired": {
-                            "S": "expired"
-                          }
-                        }
-                      },
-                      "End": true
-                    }
-                  }
-                },
-                {
-                  "StartAt": "SendNotification",
-                  "States": {
-                    "SendNotification": {
-                      "Type": "Task",
-                      "Resource": "arn:aws:states:::sns:publish",
-                      "Parameters": {
-                        "TopicArn": "${ClosedTasksNotificationTopicArn}",
-                        "Message": "Task expired",
-                        "MessageAttributes": {
-                          "assignee_id": {
-                            "DataType": "String",
-                            "StringValue.$": "$.assignee_id"
-                          },
-                          "for_admin": {
-                            "DataType": "String",
-                            "StringValue": "true"
-                          }
-                        }
-                      },
-                      "End": true
-                    }
-                  }
-                }
-              ],
-              "End": true
-            }
-          }
-        }
-      RoleArn: !GetAtt StepFunctionRole.Arn
-      Tags:
-        - Key: Component
-          Value: StepFunctions
+#  AdminSubscriptionStepFunction:
+#    Type: AWS::StepFunctions::StateMachine
+#    Properties:
+#      DefinitionString: !Sub |
+#        {
+#          "StartAt": "ParallelSubscribe",
+#          "States": {
+#            "ParallelSubscribe": {
+#              "Type": "Parallel",
+#              "Branches": [
+#                {
+#                  "StartAt": "SubscribeClosed",
+#                  "States": {
+#                    "SubscribeClosed": {
+#                      "Type": "Task",
+#                      "Resource": "arn:aws:states:::aws-sdk:sns:subscribe",
+#                      "Parameters": {
+#                        "TopicArn": "${ClosedTasksNotificationTopicArn}",
+#                        "Protocol": "email",
+#                        "Endpoint.$": "$.email",
+#                        "Attributes": {
+#                          "FilterPolicy": "{\"for_admin\": [true]}"
+#                        }
+#                      },
+#                      "End": true
+#                    }
+#                  }
+#                },
+#                {
+#                  "StartAt": "SubscribeComplete",
+#                  "States": {
+#                    "SubscribeComplete": {
+#                      "Type": "Task",
+#                      "Resource": "arn:aws:states:::aws-sdk:sns:subscribe",
+#                      "Parameters": {
+#                        "TopicArn": "${TaskCompleteNotificationTopicArn}",
+#                        "Protocol": "email",
+#                        "Endpoint.$": "$.email"
+#                      },
+#                      "End": true
+#                    }
+#                  }
+#                }
+#              ],
+#              "End": true
+#            }
+#          }
+#        }
+#      RoleArn: !GetAtt StepFunctionRole.Arn
+#      Tags:
+#        - Key: Component
+#          Value: StepFunctions
+#
+#  TaskDeadlineStepFunction:
+#    Type: AWS::StepFunctions::StateMachine
+#    Properties:
+#      DefinitionString: !Sub |
+#        {
+#          "StartAt": "ParallelActions",
+#          "States": {
+#            "ParallelActions": {
+#              "Type": "Parallel",
+#              "Branches": [
+#                {
+#                  "StartAt": "UpdateTaskStatus",
+#                  "States": {
+#                    "UpdateTaskStatus": {
+#                      "Type": "Task",
+#                      "Resource": "arn:aws:states:::dynamodb:updateItem",
+#                      "Parameters": {
+#                        "TableName": "${TasksTableName}",
+#                        "Key": {
+#                          "TaskID": {
+#                            "S.$": "$.task_id"
+#                          }
+#                        },
+#                        "UpdateExpression": "SET #status = :expired",
+#                        "ExpressionAttributeNames": {
+#                          "#status": "Status"
+#                        },
+#                        "ExpressionAttributeValues": {
+#                          ":expired": {
+#                            "S": "expired"
+#                          }
+#                        }
+#                      },
+#                      "End": true
+#                    }
+#                  }
+#                },
+#                {
+#                  "StartAt": "SendNotification",
+#                  "States": {
+#                    "SendNotification": {
+#                      "Type": "Task",
+#                      "Resource": "arn:aws:states:::sns:publish",
+#                      "Parameters": {
+#                        "TopicArn": "${ClosedTasksNotificationTopicArn}",
+#                        "Message": "Task expired",
+#                        "MessageAttributes": {
+#                          "assignee_id": {
+#                            "DataType": "String",
+#                            "StringValue.$": "$.assignee_id"
+#                          },
+#                          "for_admin": {
+#                            "DataType": "String",
+#                            "StringValue": "true"
+#                          }
+#                        }
+#                      },
+#                      "End": true
+#                    }
+#                  }
+#                }
+#              ],
+#              "End": true
+#            }
+#          }
+#        }
+#      RoleArn: !GetAtt StepFunctionRole.Arn
+#      Tags:
+#        - Key: Component
+#          Value: StepFunctions
 
 Outputs:
   TeamMemberSubscriptionStepFunctionArn:
     Description: ARN of the Team Member Subscription Step Function
     Value: !Ref TeamMemberSubscriptionStepFunction
-  AdminSubscriptionStepFunctionArn:
-    Description: ARN of the Admin Subscription Step Function
-    Value: !Ref AdminSubscriptionStepFunction
+#  AdminSubscriptionStepFunctionArn:
+#    Description: ARN of the Admin Subscription Step Function
+#    Value: !Ref AdminSubscriptionStepFunction
