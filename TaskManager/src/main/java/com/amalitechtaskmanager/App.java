@@ -1,4 +1,4 @@
-package taskmanager;
+package com.amalitechtaskmanager;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -38,6 +38,8 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
                     .withStatusCode(500);
         }
     }
+
+
 
     private String getPageContents(String address) throws IOException{
         URL url = new URL(address);
