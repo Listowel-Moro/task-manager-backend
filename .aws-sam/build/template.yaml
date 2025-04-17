@@ -1,0 +1,285 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Task Management System Backend
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: MyAppUserPool
+      AutoVerifiedAttributes:
+      - email
+      EmailVerificationMessage: Your verification code is {####}
+      EmailVerificationSubject: Verify your email for our application
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+        InviteMessageTemplate:
+          EmailSubject: Welcome to Our Application
+          EmailMessage: Your username is {username} and temporary password is {####}.
+            Please login to reset your password.
+          SMSMessage: Your username is {username} and temporary password is {####}
+      EmailConfiguration:
+        EmailSendingAccount: COGNITO_DEFAULT
+      Schema:
+      - Name: email
+        AttributeDataType: String
+        Required: true
+      - Name: name
+        AttributeDataType: String
+        Required: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+          TemporaryPasswordValidityDays: 7
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: MyAppClient
+      UserPoolId:
+        Ref: UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+      - ALLOW_USER_PASSWORD_AUTH
+      - ALLOW_REFRESH_TOKEN_AUTH
+  AdminUserGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Admins
+      UserPoolId:
+        Ref: UserPool
+      Description: Group for admin users who can create other users
+  MembersGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: member
+      UserPoolId:
+        Ref: UserPool
+      Description: Group for admin users who can create other users
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Cors:
+        AllowMethods: '''GET,POST,OPTIONS'''
+        AllowHeaders: '''Content-Type,Authorization'''
+        AllowOrigin: '''*'''
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn:
+              Fn::GetAtt:
+              - UserPool
+              - Arn
+            Identity:
+              Header: Authorization
+  TaskAssignmentNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: TaskAssignmentNotificationTopic
+  TaskDeadlineNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: TaskDeadlineNotification
+  ClosedTasksNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: ClosedTasksNotification
+  TaskCompleteNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: TaskCompleteNotification
+  EmailNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: EmailNotificationTopic
+      DisplayName: Task Notifications
+  StepFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: states.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: StepFunctionPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - sns:Subscribe
+            - sns:Publish
+            - dynamodb:UpdateItem
+            Resource: '*'
+  TeamMemberSubscriptionStepFunction:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      DefinitionString:
+        Fn::Sub: "{\n  \"StartAt\": \"ParallelSubscribe\",\n  \"States\": {\n    \"\
+          ParallelSubscribe\": {\n      \"Type\": \"Parallel\",\n      \"Branches\"\
+          : [\n        {\n          \"StartAt\": \"SubscribeAssignment\",\n      \
+          \    \"States\": {\n            \"SubscribeAssignment\": {\n           \
+          \   \"Type\": \"Task\",\n              \"Resource\": \"arn:aws:states:::aws-sdk:sns:subscribe\"\
+          ,\n              \"Parameters\": {\n                \"TopicArn\": \"${TaskAssignmentNotificationTopic}\"\
+          ,\n                \"Protocol\": \"email\",\n                \"Endpoint.$\"\
+          : \"$.email\",\n                \"Attributes\": {\n                  \"\
+          FilterPolicy\": \"{\\\"user_id\\\": [\\\"$.user_id\\\"]}\"\n           \
+          \     }\n              },\n              \"End\": true\n            }\n\
+          \          }\n        },\n        {\n          \"StartAt\": \"SubscribeDeadline\"\
+          ,\n          \"States\": {\n            \"SubscribeDeadline\": {\n     \
+          \         \"Type\": \"Task\",\n              \"Resource\": \"arn:aws:states:::aws-sdk:sns:subscribe\"\
+          ,\n              \"Parameters\": {\n                \"TopicArn\": \"${TaskDeadlineNotificationTopic}\"\
+          ,\n                \"Protocol\": \"email\",\n                \"Endpoint.$\"\
+          : \"$.email\",\n                \"Attributes\": {\n                  \"\
+          FilterPolicy\": \"{\\\"user_id\\\": [\\\"$.user_id\\\"]}\"\n           \
+          \     }\n              },\n              \"End\": true\n            }\n\
+          \          }\n        },\n        {\n          \"StartAt\": \"SubscribeClosed\"\
+          ,\n          \"States\": {\n            \"SubscribeClosed\": {\n       \
+          \       \"Type\": \"Task\",\n              \"Resource\": \"arn:aws:states:::aws-sdk:sns:subscribe\"\
+          ,\n              \"Parameters\": {\n                \"TopicArn\": \"${ClosedTasksNotificationTopic}\"\
+          ,\n                \"Protocol\": \"email\",\n                \"Endpoint.$\"\
+          : \"$.email\",\n                \"Attributes\": {\n                  \"\
+          FilterPolicy\": \"{\\\"assignee_id\\\": [\\\"$.user_id\\\"]}\"\n       \
+          \         }\n              },\n              \"End\": true\n           \
+          \ }\n          }\n        }\n      ],\n      \"End\": true\n    }\n  }\n\
+          }\n"
+      RoleArn:
+        Fn::GetAtt:
+        - StepFunctionRole
+        - Arn
+  SignUpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SignUpFunction
+      CodeUri: SignUpFunction
+      Handler: taskmanager.handlers.auth.SignUpHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:SignUp
+          - cognito-idp:AdminConfirmSignUp
+          - cognito-idp:AdminAddUserToGroup
+          Resource:
+            Fn::GetAtt:
+            - UserPool
+            - Arn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID:
+            Ref: UserPoolClient
+          USER_POOL_ID:
+            Ref: UserPool
+      Events:
+        SignUpApi:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /signup
+            Method: POST
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: SignUpFunction
+  SignInFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SignInFunction
+      CodeUri: SignInFunction
+      Handler: taskmanager.handlers.auth.SignInHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:InitiateAuth
+          Resource:
+            Fn::GetAtt:
+            - UserPool
+            - Arn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID:
+            Ref: UserPoolClient
+      Events:
+        SignInApi:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /signin
+            Method: POST
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: SignInFunction
+  AdminCreateMemberFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: AdminCreateMemberFunction
+      CodeUri: AdminCreateMemberFunction
+      Handler: taskmanager.handlers.auth.AdminCreateMemberHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:AdminCreateUser
+          - cognito-idp:AdminAddUserToGroup
+          Resource:
+            Fn::GetAtt:
+            - UserPool
+            - Arn
+        - Effect: Allow
+          Action:
+          - sns:Publish
+          Resource:
+            Ref: TaskAssignmentNotificationTopic
+        - Effect: Allow
+          Action:
+          - states:StartExecution
+          Resource:
+            Ref: TeamMemberSubscriptionStepFunction
+      Environment:
+        Variables:
+          USER_POOL_ID:
+            Ref: UserPool
+          TASK_ASSIGNMENT_TOPIC_ARN:
+            Ref: TaskAssignmentNotificationTopic
+          TEAM_MEMBER_SUBSCRIPTION_STEP_FUNCTION_ARN:
+            Ref: TeamMemberSubscriptionStepFunction
+      Events:
+        AdminCreateMemberApi:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /admin/create-member
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+    Metadata:
+      SamResourceId: AdminCreateMemberFunction
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value:
+      Fn::Sub: https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod/
