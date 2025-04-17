@@ -1,5 +1,4 @@
 package com.amalitechtaskmanager.handlers.task;
-
 import com.amalitechtaskmanager.factories.DynamoDbFactory;
 import com.amalitechtaskmanager.factories.ObjectMapperFactory;
 import com.amalitechtaskmanager.utils.AttributeValueConverter;
@@ -14,13 +13,11 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public class MemberGetTask implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
-
     private static final String TABLE_NAME = "Tasks";
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent request, Context context) {
         try {
-
             String taskId = request.getPathParameters().get("taskId");
             if (taskId == null) {
                 return errorResponse(400, "Missing taskId");
