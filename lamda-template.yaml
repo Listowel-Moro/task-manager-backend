@@ -340,16 +340,15 @@ Resources:
         - Key: Component
           Value: Lambda
 
-  GetTasksFunction:
+  GetAdminTasksFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: helloworld.GetTasks::handleRequest
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Handler: com.amalitechtaskmanager.handlers.task.GetAdminTasksHandler::handleRequest
       Environment:
         Variables:
           TASK_TABLE_NAME: !Ref TasksTableName
       Events:
-        GetTasksApi:
+        GetAdminTasksApi:
           Type: Api
           Properties:
             Path: /tasks
@@ -358,16 +357,16 @@ Resources:
         - Key: Component
           Value: Lambda
 
-  GetTaskFunction:
+  GetAdminTaskFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: helloworld.GetTask::handleRequest
+      Handler: com.amalitechtaskmanager.handlers.task.GetAdminTaskHandler::handleRequest
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
           TASK_TABLE_NAME: !Ref TasksTableName
       Events:
-        GetTask:
+        GetAdminTask:
           Type: Api
           Properties:
             Path: /tasks/{taskId}
@@ -376,16 +375,16 @@ Resources:
         - Key: Component
           Value: Lambda
 
-  GetTaskAnalyticsFunction:
+  GetAdminTaskAnalyticsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: helloworld.GetTaskAnalytics::handleRequest
+      Handler: com.amalitechtaskmanager.handlers.task.GetAdminAnalyticsHandler::handleRequest
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
           TASK_TABLE_NAME: !Ref TasksTableName
       Events:
-        GetTasksApi:
+        GetAdminAnalyticsApi:
           Type: Api
           Properties:
             Path: /tasks/analytics
