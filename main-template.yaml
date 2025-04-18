@@ -3,16 +3,13 @@ Transform: AWS::Serverless-2016-10-31
 Description: Task Management System Backend - Main Template
 
 Resources:
-  CognitoStack:
+  DynamoDBStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: cognito-template.yaml
-      Parameters:
-        TeamMemberSubscriptionStepFunctionArn: !GetAtt StepFunctionsStack.Outputs.TeamMemberSubscriptionStepFunctionArn
-        TaskAssignmentNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentNotificationTopicArn  # Changed from TaskAssignmentNotificationTopic
+      TemplateURL: dynamodb-template.yaml
       Tags:
         - Key: Component
-          Value: Cognito
+          Value: DynamoDB
 
   SnsSqsStack:
     Type: AWS::CloudFormation::Stack
@@ -33,6 +30,34 @@ Resources:
       Tags:
         - Key: Component
           Value: StepFunctions
+
+  CognitoStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: cognito-template.yaml
+      Parameters:
+        TeamMemberSubscriptionStepFunctionArn: !GetAtt StepFunctionsStack.Outputs.TeamMemberSubscriptionStepFunctionArn
+        TaskAssignmentNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentNotificationTopicArn
+      Tags:
+        - Key: Component
+          Value: Cognito
+
+  LambdaStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: lamda-template.yaml
+      Parameters:
+        UserPoolId: !GetAtt CognitoStack.Outputs.UserPoolId
+        UserPoolClientId: !GetAtt CognitoStack.Outputs.UserPoolClientId
+        TasksTableName: !GetAtt DynamoDBStack.Outputs.TasksTableName
+        UsersTableName: "Users"
+        TaskAssignmentQueueArn: "arn:aws:sqs:region:account-id:TaskAssignmentQueue.fifo"
+        TaskAssignmentNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentNotificationTopicArn
+        TaskDeadlineNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskDeadlineNotificationTopicArn
+        TaskExpirationNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskExpirationNotificationTopicArn
+      Tags:
+        - Key: Component
+          Value: Lambda
 
 Outputs:
   ApiUrlCognito:

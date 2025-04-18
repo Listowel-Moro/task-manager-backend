@@ -34,11 +34,11 @@ Resources:
         - Key: Component
           Value: SNS-SQS
 
-  EmailNotificationTopic:
+  TaskExpirationNotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: EmailNotificationTopic
-      DisplayName: "Task Notifications"
+      TopicName: TaskExpirationNotificationTopic
+      DisplayName: "Task Expiration Notifications"
       Tags:
         - Key: Component
           Value: SNS-SQS
@@ -83,6 +83,9 @@ Outputs:
   ClosedTasksNotificationTopicArn:
     Description: SNS Closed Tasks Notification Topic ARN
     Value: !Ref ClosedTasksNotificationTopic
+  TaskExpirationNotificationTopicArn:
+    Description: SNS Task Expiration Notification Topic ARN
+    Value: !Ref TaskExpirationNotificationTopic
 #  TaskCompleteNotificationTopicArn:
 #    Description: SNS Task Complete Notification Topic ARN
 #    Value: !Ref TaskCompleteNotificationTopic

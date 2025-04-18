@@ -5,7 +5,7 @@
     <artifactId>TaskManager</artifactId>
     <version>1.0</version>
     <packaging>jar</packaging>
-    <name>Task Management System for a field team using AWS serverless services (backend)</name>
+    <name>Task Management System for a field team using AWS serverless services</name>
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
@@ -21,7 +21,7 @@
     <dependency>
         <groupId>com.amazonaws</groupId>
         <artifactId>aws-lambda-java-events</artifactId>
-        <version>3.11.0</version>
+        <version>3.11.1</version>
     </dependency>
 
     <dependency>

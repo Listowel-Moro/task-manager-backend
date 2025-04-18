@@ -18,6 +18,15 @@ Parameters:
   TaskAssignmentNotificationTopicArn:
     Type: String
     Description: SNS Task Assignment Notification Topic ARN
+  TaskDeadlineNotificationTopicArn:
+    Type: String
+    Description: SNS Task Deadline Notification Topic ARN
+  TaskExpirationNotificationTopicArn:
+    Type: String
+    Description: SNS Task Expiration Notification Topic ARN
+  UsersTableName:
+    Type: String
+    Description: DynamoDB Users Table Name
 
 Globals:
   Function:
@@ -69,7 +78,15 @@ Resources:
               - Effect: Allow
                 Action:
                   - sns:Publish
-                Resource: !Ref TaskAssignmentNotificationTopicArn
+                Resource:
+                  - !Ref TaskAssignmentNotificationTopicArn
+                  - !Ref TaskDeadlineNotificationTopicArn
+                  - !Ref TaskExpirationNotificationTopicArn
+              - Effect: Allow
+                Action:
+                  - events:PutRule
+                  - events:PutTargets
+                Resource: '*'
       Tags:
         - Key: Component
           Value: Lambda
@@ -390,6 +407,30 @@ Resources:
           Properties:
             Path: /tasks/analytics
             Method: GET
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  TaskExpirationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: TaskExpirationHandler
+      Handler: com.amalitechtaskmanager.handlers.task.TaskExpirationHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTableName
+          USERS_TABLE: !Ref UsersTableName
+          TASK_EXPIRATION_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationNotificationTopicArn
+          TASK_DEADLINE_NOTIFICATION_TOPIC_ARN: !Ref TaskDeadlineNotificationTopicArn
+      Events:
+        ScheduledEvent:
+          Type: Schedule
+          Properties:
+            Schedule: 'rate(1 day)'
+            Name: TaskExpirationCheck
+            Description: 'Daily check for expired tasks'
+            Enabled: true
       Tags:
         - Key: Component
           Value: Lambda
