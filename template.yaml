@@ -1,858 +1,887 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
-Description: Task Management System Backend
-
-Resources:
-  # Cognito User Pool
-  UserPool:
-    Type: AWS::Cognito::UserPool
-    Properties:
-      UserPoolName: MyAppUserPool
-      AutoVerifiedAttributes:
-        - email
-      EmailVerificationMessage: "Your verification code is {####}"
-      EmailVerificationSubject: "Verify your email for our application"
-      AdminCreateUserConfig:
-        AllowAdminCreateUserOnly: false  # Allow users to sign up themselves
-        InviteMessageTemplate:
-          EmailSubject: Welcome to Our Application
-          EmailMessage: Your username is {username} and temporary password is {####}. Please login to reset your password.
-          SMSMessage: Your username is {username} and temporary password is {####}
-      EmailConfiguration:
-        EmailSendingAccount: COGNITO_DEFAULT
-      Schema:
-        - Name: email
-          AttributeDataType: String
-          Required: true
-        - Name: name
-          AttributeDataType: String
-          Required: false
-      Policies:
-        PasswordPolicy:
-          MinimumLength: 8
-          RequireLowercase: true
-          RequireNumbers: true
-          RequireSymbols: true
-          RequireUppercase: true
-          TemporaryPasswordValidityDays: 7
-
-  UserPoolClient:
-    Type: AWS::Cognito::UserPoolClient
-    Properties:
-      ClientName: MyAppClient
-      UserPoolId: !Ref UserPool
-      GenerateSecret: false
-      ExplicitAuthFlows:
-        - ALLOW_USER_PASSWORD_AUTH
-        - ALLOW_REFRESH_TOKEN_AUTH
-
-  AdminUserGroup:
-    Type: AWS::Cognito::UserPoolGroup
-    Properties:
-      GroupName: Admins
-      UserPoolId: !Ref UserPool
-      Description: Group for admin users who can create other users
-
-  MembersGroup:
-    Type: AWS::Cognito::UserPoolGroup
-    Properties:
-      GroupName: member
-      UserPoolId: !Ref UserPool
-      Description: Group for admin users who can create other users
-
-  # DynamoDB Table for Tasks
-  TasksTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: Tasks
-      AttributeDefinitions:
-        - AttributeName: taskId
-          AttributeType: S
-      KeySchema:
-        - AttributeName: taskId
-          KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
-
-  # SNS Topics
-  TaskAssignmentNotificationTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: TaskAssignmentNotificationTopic.fifo
-      FifoTopic: true
-      ContentBasedDeduplication: true
-
-  TaskDeadlineNotificationTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: TaskDeadlineNotification
-
-  ClosedTasksNotificationTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: ClosedTasksNotification
-
-  TaskCompleteNotificationTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: TaskCompleteNotification
-
-  EmailNotificationTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: EmailNotificationTopic
-      DisplayName: "Task Notifications"
-
-  # SQS Queues
-  TaskCreationDLQ:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: TaskCreationDLQ.fifo
-      FifoQueue: true
-
-  TaskAssignmentQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: TaskAssignmentQueue.fifo
-      FifoQueue: true
-      ContentBasedDeduplication: true
-      RedrivePolicy:
-        deadLetterTargetArn: !GetAtt TaskAssignmentDLQ.Arn
-        maxReceiveCount: 3
-
-#  TaskCreationQueue:
-#    Type: AWS::SQS::Queue
-#    Properties:
-#      QueueName: TaskCreationQueue.fifo
-#      FifoQueue: true
-#      RedrivePolicy:
-#        deadLetterTargetArn: !GetAtt TaskCreationDLQ.Arn
-#        maxReceiveCount: 3
-
-  TaskDeadlineQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: TaskDeadlineQueue
-
-  # Step Functions
-  TeamMemberSubscriptionStepFunction:
-    Type: AWS::StepFunctions::StateMachine
-    Properties:
-      DefinitionString: !Sub |
-        {
-          "StartAt": "ParallelSubscribe",
-          "States": {
-            "ParallelSubscribe": {
-              "Type": "Parallel",
-              "Branches": [
-                {
-                  "StartAt": "SubscribeAssignment",
-                  "States": {
-                    "SubscribeAssignment": {
-                      "Type": "Task",
-                      "Resource": "arn:aws:states:::aws-sdk:sns:subscribe",
-                      "Parameters": {
-                        "TopicArn": "${TaskAssignmentNotificationTopic}",
-                        "Protocol": "email",
-                        "Endpoint.$": "$.email",
-                        "Attributes": {
-                          "FilterPolicy": "{\"user_id\": [\"$.user_id\"]}"
-                        }
-                      },
-                      "End": true
-                    }
-                  }
-                },
-                {
-                  "StartAt": "SubscribeDeadline",
-                  "States": {
-                    "SubscribeDeadline": {
-                      "Type": "Task",
-                      "Resource": "arn:aws:states:::aws-sdk:sns:subscribe",
-                      "Parameters": {
-                        "TopicArn": "${TaskDeadlineNotificationTopic}",
-                        "Protocol": "email",
-                        "Endpoint.$": "$.email",
-                        "Attributes": {
-                          "FilterPolicy": "{\"user_id\": [\"$.user_id\"]}"
-                        }
-                      },
-                      "End": true
-                    }
-                  }
-                },
-                {
-                  "StartAt": "SubscribeClosed",
-                  "States": {
-                    "SubscribeClosed": {
-                      "Type": "Task",
-                      "Resource": "arn:aws:states:::aws-sdk:sns:subscribe",
-                      "Parameters": {
-                        "TopicArn": "${ClosedTasksNotificationTopic}",
-                        "Protocol": "email",
-                        "Endpoint.$": "$.email",
-                        "Attributes": {
-                          "FilterPolicy": "{\"assignee_id\": [\"$.user_id\"]}"
-                        }
-                      },
-                      "End": true
-                    }
-                  }
-                }
-              ],
-              "End": true
-            }
-          }
-        }
-      RoleArn: !GetAtt StepFunctionRole.Arn
-
-  AdminSubscriptionStepFunction:
-    Type: AWS::StepFunctions::StateMachine
-    Properties:
-      DefinitionString: !Sub |
-        {
-          "StartAt": "ParallelSubscribe",
-          "States": {
-            "ParallelSubscribe": {
-              "Type": "Parallel",
-              "Branches": [
-                {
-                  "StartAt": "SubscribeClosed",
-                  "States": {
-                    "SubscribeClosed": {
-                      "Type": "Task",
-                      "Resource": "arn:aws:states:::aws-sdk:sns:subscribe",
-                      "Parameters": {
-                        "TopicArn": "${ClosedTasksNotificationTopic}",
-                        "Protocol": "email",
-                        "Endpoint.$": "$.email",
-                        "Attributes": {
-                          "FilterPolicy": "{\"for_admin\": [true]}"
-                        }
-                      },
-                      "End": true
-                    }
-                  }
-                },
-                {
-                  "StartAt": "SubscribeComplete",
-                  "States": {
-                    "SubscribeComplete": {
-                      "Type": "Task",
-                      "Resource": "arn:aws:states:::aws-sdk:sns:subscribe",
-                      "Parameters": {
-                        "TopicArn": "${TaskCompleteNotificationTopic}",
-                        "Protocol": "email",
-                        "Endpoint.$": "$.email"
-                      },
-                      "End": true
-                    }
-                  }
-                }
-              ],
-              "End": true
-            }
-          }
-        }
-      RoleArn: !GetAtt StepFunctionRole.Arn
-
-  TaskDeadlineStepFunction:
-    Type: AWS::StepFunctions::StateMachine
-    Properties:
-      DefinitionString: !Sub |
-        {
-          "StartAt": "ParallelActions",
-          "States": {
-            "ParallelActions": {
-              "Type": "Parallel",
-              "Branches": [
-                {
-                  "StartAt": "UpdateTaskStatus",
-                  "States": {
-                    "UpdateTaskStatus": {
-                      "Type": "Task",
-                      "Resource": "arn:aws:states:::dynamodb:updateItem",
-                      "Parameters": {
-                        "TableName": "${TasksTable}",
-                        "Key": {
-                          "TaskID": {
-                            "S.$": "$.task_id"
-                          }
-                        },
-                        "UpdateExpression": "SET #status = :expired",
-                        "ExpressionAttributeNames": {
-                          "#status": "Status"
-                        },
-                        "ExpressionAttributeValues": {
-                          ":expired": {
-                            "S": "expired"
-                          }
-                        }
-                      },
-                      "End": true
-                    }
-                  }
-                },
-                {
-                  "StartAt": "SendNotification",
-                  "States": {
-                    "SendNotification": {
-                      "Type": "Task",
-                      "Resource": "arn:aws:states:::sns:publish",
-                      "Parameters": {
-                        "TopicArn": "${ClosedTasksNotificationTopic}",
-                        "Message": "Task expired",
-                        "MessageAttributes": {
-                          "assignee_id": {
-                            "DataType": "String",
-                            "StringValue.$": "$.assignee_id"
-                          },
-                          "for_admin": {
-                            "DataType": "String",
-                            "StringValue": "true"
-                          }
-                        }
-                      },
-                      "End": true
-                    }
-                  }
-                }
-              ],
-              "End": true
-            }
-          }
-        }
-      RoleArn: !GetAtt StepFunctionRole.Arn
-
-  StepFunctionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: states.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: StepFunctionPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - sns:Subscribe
-                  - sns:Publish
-                  - dynamodb:UpdateItem
-                Resource: '*'
-
-  # Lambda Functions
-  SignUpFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: SignUpFunction
-      CodeUri: TaskManager/
-      Handler: auth.SignUpHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:SignUp
-                - cognito-idp:AdminConfirmSignUp
-              Resource: !GetAtt UserPool.Arn
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClient
-          USER_POOL_ID: !Ref UserPool
-      Events:
-        SignUpApi:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /signup
-            Method: POST
-            Auth:
-              Authorizer: NONE
-
-  SignInFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: SignInFunction
-      CodeUri: TaskManager/
-      Handler: auth.SignInHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:InitiateAuth
-              Resource: !GetAtt UserPool.Arn
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClient
-      Events:
-        SignInApi:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /signin
-            Method: POST
-            Auth:
-              Authorizer: NONE
-
-  ConfirmSignUpFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: ConfirmSignUpFunction
-      CodeUri: TaskManager/
-      Handler: auth.ConfirmSignUpHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:ConfirmSignUp
-              Resource: "*"
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClient
-      Events:
-        ConfirmSignUpApi:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /confirm-signup
-            Method: POST
-            Auth:
-              Authorizer: NONE
-
-  ResendConfirmationCodeFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: ResendConfirmationCodeFunction
-      CodeUri: TaskManager/
-      Handler: auth.ResendConfirmationCodeHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:ResendConfirmationCode
-              Resource: "*"
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClient
-      Events:
-        ResendConfirmationCodeApi:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /resend-confirmation-code
-            Method: POST
-            Auth:
-              Authorizer: NONE
-
-  ChangePasswordFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: ChangePasswordFunction
-      CodeUri: TaskManager/
-      Handler: auth.ChangePasswordHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:ChangePassword
-              Resource: "*"
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClient
-      Events:
-        ChangePasswordApi:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /change-password
-            Method: POST
-            Auth:
-              Authorizer: CognitoAuthorizer
-
-  ForgotPasswordFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: ForgotPasswordFunction
-      CodeUri: TaskManager/
-      Handler: auth.ForgotPasswordHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:ForgotPassword
-              Resource: "*"
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClient
-      Events:
-        ForgotPasswordApi:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /forgot-password
-            Method: POST
-            Auth:
-              Authorizer: NONE
-
-  ConfirmForgotPasswordFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: ConfirmForgotPasswordFunction
-      CodeUri: TaskManager/
-      Handler: auth.ConfirmForgotPasswordHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:ConfirmForgotPassword
-              Resource: "*"
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClient
-      Events:
-        ConfirmForgotPasswordApi:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /confirm-forgot-password
-            Method: POST
-            Auth:
-              Authorizer: NONE
-
-  SignOutFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: SignOutFunction
-      CodeUri: TaskManager/
-      Handler: auth.SignOutHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:GlobalSignOut
-              Resource: !GetAtt UserPool.Arn
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClient
-      Events:
-        SignOutApi:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /signout
-            Method: POST
-            Auth:
-              Authorizer: CognitoAuthorizer
-
-  RefreshTokenFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: RefreshTokenFunction
-      CodeUri: TaskManager/
-      Handler: auth.RefreshTokenHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:InitiateAuth
-              Resource: !GetAtt UserPool.Arn
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClient
-      Events:
-        RefreshTokenApi:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /refresh-token
-            Method: POST
-            Auth:
-              Authorizer: NONE
-
-  ProtectedFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: ProtectedFunction
-      CodeUri: TaskManager/
-      Handler: auth.ProtectedHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      Events:
-        ProtectedApi:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /protected
-            Method: GET
-            Auth:
-              Authorizer: CognitoAuthorizer
-
-  AdminCreateUserFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: AdminCreateUserFunction
-      CodeUri: TaskManager/
-      Handler: auth.AdminCreateUserHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:AdminGetUser
-                - cognito-idp:ListGroupsForUser
-              Resource: !GetAtt UserPool.Arn
-      Environment:
-        Variables:
-          USER_POOL_ID: !Ref UserPool
-      Events:
-        AdminCreateUserApi:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /admin/user
-            Method: GET
-            Auth:
-              Authorizer: CognitoAuthorizer
-
-  CreateTaskFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: TaskManager/
-      Handler: helloworld.CreateTaskHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref TasksTable
-        - Statement:
-            - Effect: Allow
-              Action:
-                - sqs:SendMessage
-              Resource: !GetAtt TaskAssignmentQueue.Arn
-      Environment:
-        Variables:
-          TASKS_TABLE: !Ref TasksTable
-          TASK_ASSIGNMENT_QUEUE: !Ref TaskAssignmentQueue
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            Path: /tasks
-            Method: POST
-
-  ProcessTaskAssignmentFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: TaskManager/
-      Handler: helloworld.ProcessTaskAssignmentHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref UsersTable
-        - Statement:
-            - Effect: Allow
-              Action:
-                - sns:Publish
-              Resource: !Ref TaskAssignmentNotificationTopic
-      Environment:
-        Variables:
-          USERS_TABLE: !Ref UsersTable
-          SNS_TOPIC_ARN: !Ref TaskAssignmentNotificationTopic
-      Events:
-        SqsEvent:
-          Type: SQS
-          Properties:
-            Queue: !GetAtt TaskAssignmentQueue.Arn
-            BatchSize: 10
-
-#  ProcessTaskCreationQueueFunction:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      Handler: taskManagement.handlers.ProcessTaskCreationQueueHandler::handleRequest
-#      Runtime: java21
-#      CodeUri: ./backend/
-#      MemorySize: 512
-#      Timeout: 30
-#      Environment:
-#        Variables:
-#          TASKS_TABLE: !Ref TasksTable
-#          TASK_ASSIGNMENT_TOPIC_ARN: !Ref TaskAssignmentNotificationTopic
-#      Policies:
-#        - DynamoDBCrudPolicy:
-#            TableName: !Ref TasksTable
-#        - SNSPublishMessagePolicy:
-#            TopicName: !GetAtt TaskAssignmentNotificationTopic.TopicName
-#      Events:
-#        SQSEvent:
-#          Type: SQS
-#          Properties:
-#            Queue: !GetAtt TaskCreationQueue.Arn
-#            BatchSize: 10
+#AWSTemplateFormatVersion: '2010-09-09'
+#Transform: AWS::Serverless-2016-10-31
+#Description: Task Management System Backend - Main Template
 #
-  GetTasksFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: TaskManager/
-      Handler: helloworld.GetTasks::handleRequest
-      Environment:
-        Variables:
-          TASK_TABLE_NAME: !Ref TaskTable
-      Events:
-        GetTasksApi:
-          Type: Api
-          Properties:
-            Path: /tasks
-            Method: get
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref TaskTable
-
-  GetTaskFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: TaskManager/
-      Handler: helloworld.GetTask::handleRequest
-      Environment:
-        Variables:
-          TASK_TABLE_NAME: !Ref TaskTable
-      Events:
-        GetTask:
-          Type: Api
-          Properties:
-            Path: /tasks/{taskId}
-            Method: get
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref TaskTable
-
-  GetTaskAnalyticsFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: TaskManager/
-      Handler: helloworld.GetTaskAnalytics::handleRequest
-      Environment:
-        Variables:
-          TASK_TABLE_NAME: !Ref TaskTable
-      Events:
-        GetTasksApi:
-          Type: Api
-          Properties:
-            Path: /tasks/analytics
-            Method: get
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref TaskTable
+#Resources:
+#  CognitoStack:
+#    Type: AWS::CloudFormation::Stack
+#    Properties:
+#      TemplateURL: cognito-template.yaml  # This will be replaced with S3 URL during deployment
+#      Tags:
+#        - Key: Component
+#          Value: Cognito
 #
-#  OnboardUserFunction:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      Handler: taskManagement.handlers.OnboardUserHandler::handleRequest
-#      Runtime: java21
-#      CodeUri: ./backend/
-#      MemorySize: 512
-#      Timeout: 30
-#      Environment:
-#        Variables:
-#          USER_POOL_ID: !Ref UserPool
-#          TEAM_MEMBER_SFN_ARN: !Ref TeamMemberSubscriptionStepFunction
-#          ADMIN_SFN_ARN: !Ref AdminSubscriptionStepFunction
-#      Policies:
-#        - Version: '2012-10-17'
-#          Statement:
-#            - Effect: Allow
-#              Action:
-#                - cognito-idp:AdminCreateUser
-#                - cognito-idp:AdminAddUserToGroup
-#                - states:StartExecution
-#              Resource: '*'
-
-  # API Gateway
-#  ApiGateway:
-#    Type: AWS::Serverless::Api
-#    Properties:
-#      StageName: prod
-#      Auth:
-#        DefaultAuthorizer: CognitoAuthorizer
-#        Authorizers:
-#          CognitoAuthorizer:
-#            UserPoolArn: !GetAtt UserPool.Arn
-#      DefinitionBody:
-#        swagger: "2.0"
-#        info:
-#          title: TaskManagementApi
-#        paths:
-#          /tasks:
-#            post:
-#              x-amazon-apigateway-integration:
-#                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateTaskFunction.Arn}/invocations"
-#                httpMethod: POST
-#                type: aws_proxy
-#              security:
-#                - CognitoAuthorizer: [ ]
-#            get:
-#              x-amazon-apigateway-integration:
-#                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetTasksFunction.Arn}/invocations"
-#                httpMethod: POST
-#                type: aws_proxy
-#              security:
-#                - CognitoAuthorizer: [ ]
-#          /users:
-#            post:
-#              x-amazon-apigateway-integration:
-#                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnboardUserFunction.Arn}/invocations"
-#                httpMethod: POST
-#                type: aws_proxy
-#              security:
-#                - CognitoAuthorizer: [ ]
-
-Outputs:
-  ApiUrl:
-    Description: API Gateway endpoint URL
-    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+#  # Your other resources...
+#Outputs:
+#  UserPoolId:
+#    Description: Cognito User Pool ID
+#    Value: !GetAtt CognitoStack.Outputs.UserPoolId
+#  UserPoolClientId:
+#    Description: Cognito User Pool Client ID
+#    Value: !GetAtt CognitoStack.Outputs.UserPoolClientId
+#  UserPoolArn:
+#    Description: Cognito User Pool ARN
+#    Value: !GetAtt CognitoStack.Outputs.UserPoolArn
+#  ApiUrl:
+#    Description: API Gateway endpoint URL
+#    Value: !GetAtt CognitoStack.Outputs.ApiUrl
+#
+#
+##AWSTemplateFormatVersion: '2010-09-09'
+##Transform: AWS::Serverless-2016-10-31
+##Description: Task Management System Backend
+##
+##Resources:
+##  # Cognito User Pool
+##  UserPool:
+##    Type: AWS::Cognito::UserPool
+##    Properties:
+##      UserPoolName: MyAppUserPool
+##      AutoVerifiedAttributes:
+##        - email
+##      EmailVerificationMessage: "Your verification code is {####}"
+##      EmailVerificationSubject: "Verify your email for our application"
+##      AdminCreateUserConfig:
+##        AllowAdminCreateUserOnly: false  # Allow users to sign up themselves
+##        InviteMessageTemplate:
+##          EmailSubject: Welcome to Our Application
+##          EmailMessage: Your username is {username} and temporary password is {####}. Please login to reset your password.
+##          SMSMessage: Your username is {username} and temporary password is {####}
+##      EmailConfiguration:
+##        EmailSendingAccount: COGNITO_DEFAULT
+##      Schema:
+##        - Name: email
+##          AttributeDataType: String
+##          Required: true
+##        - Name: name
+##          AttributeDataType: String
+##          Required: false
+##      Policies:
+##        PasswordPolicy:
+##          MinimumLength: 8
+##          RequireLowercase: true
+##          RequireNumbers: true
+##          RequireSymbols: true
+##          RequireUppercase: true
+##          TemporaryPasswordValidityDays: 7
+##
+##  UserPoolClient:
+##    Type: AWS::Cognito::UserPoolClient
+##    Properties:
+##      ClientName: MyAppClient
+##      UserPoolId: !Ref UserPool
+##      GenerateSecret: false
+##      ExplicitAuthFlows:
+##        - ALLOW_USER_PASSWORD_AUTH
+##        - ALLOW_REFRESH_TOKEN_AUTH
+##
+##  AdminUserGroup:
+##    Type: AWS::Cognito::UserPoolGroup
+##    Properties:
+##      GroupName: Admins
+##      UserPoolId: !Ref UserPool
+##      Description: Group for admin users who can create other users
+##
+##  MembersGroup:
+##    Type: AWS::Cognito::UserPoolGroup
+##    Properties:
+##      GroupName: member
+##      UserPoolId: !Ref UserPool
+##      Description: Group for admin users who can create other users
+##
+##  # DynamoDB Table for Tasks
+##  TasksTable:
+##    Type: AWS::DynamoDB::Table
+##    Properties:
+##      TableName: Tasks
+##      AttributeDefinitions:
+##        - AttributeName: taskId
+##          AttributeType: S
+##      KeySchema:
+##        - AttributeName: taskId
+##          KeyType: HASH
+##      BillingMode: PAY_PER_REQUEST
+##
+##  # SNS Topics
+##  TaskAssignmentNotificationTopic:
+##    Type: AWS::SNS::Topic
+##    Properties:
+##      TopicName: TaskAssignmentNotificationTopic.fifo
+##      FifoTopic: true
+##      ContentBasedDeduplication: true
+##
+##  TaskDeadlineNotificationTopic:
+##    Type: AWS::SNS::Topic
+##    Properties:
+##      TopicName: TaskDeadlineNotification
+##
+##  ClosedTasksNotificationTopic:
+##    Type: AWS::SNS::Topic
+##    Properties:
+##      TopicName: ClosedTasksNotification
+##
+##  TaskCompleteNotificationTopic:
+##    Type: AWS::SNS::Topic
+##    Properties:
+##      TopicName: TaskCompleteNotification
+##
+##  EmailNotificationTopic:
+##    Type: AWS::SNS::Topic
+##    Properties:
+##      TopicName: EmailNotificationTopic
+##      DisplayName: "Task Notifications"
+##
+##  # SQS Queues
+##  TaskCreationDLQ:
+##    Type: AWS::SQS::Queue
+##    Properties:
+##      QueueName: TaskCreationDLQ.fifo
+##      FifoQueue: true
+##
+##  TaskAssignmentQueue:
+##    Type: AWS::SQS::Queue
+##    Properties:
+##      QueueName: TaskAssignmentQueue.fifo
+##      FifoQueue: true
+##      ContentBasedDeduplication: true
+##      RedrivePolicy:
+##        deadLetterTargetArn: !GetAtt TaskAssignmentDLQ.Arn
+##        maxReceiveCount: 3
+##
+###  TaskCreationQueue:
+###    Type: AWS::SQS::Queue
+###    Properties:
+###      QueueName: TaskCreationQueue.fifo
+###      FifoQueue: true
+###      RedrivePolicy:
+###        deadLetterTargetArn: !GetAtt TaskCreationDLQ.Arn
+###        maxReceiveCount: 3
+##
+##  TaskDeadlineQueue:
+##    Type: AWS::SQS::Queue
+##    Properties:
+##      QueueName: TaskDeadlineQueue
+##
+##  # Step Functions
+##  TeamMemberSubscriptionStepFunction:
+##    Type: AWS::StepFunctions::StateMachine
+##    Properties:
+##      DefinitionString: !Sub |
+##        {
+##          "StartAt": "ParallelSubscribe",
+##          "States": {
+##            "ParallelSubscribe": {
+##              "Type": "Parallel",
+##              "Branches": [
+##                {
+##                  "StartAt": "SubscribeAssignment",
+##                  "States": {
+##                    "SubscribeAssignment": {
+##                      "Type": "Task",
+##                      "Resource": "arn:aws:states:::aws-sdk:sns:subscribe",
+##                      "Parameters": {
+##                        "TopicArn": "${TaskAssignmentNotificationTopic}",
+##                        "Protocol": "email",
+##                        "Endpoint.$": "$.email",
+##                        "Attributes": {
+##                          "FilterPolicy": "{\"user_id\": [\"$.user_id\"]}"
+##                        }
+##                      },
+##                      "End": true
+##                    }
+##                  }
+##                },
+##                {
+##                  "StartAt": "SubscribeDeadline",
+##                  "States": {
+##                    "SubscribeDeadline": {
+##                      "Type": "Task",
+##                      "Resource": "arn:aws:states:::aws-sdk:sns:subscribe",
+##                      "Parameters": {
+##                        "TopicArn": "${TaskDeadlineNotificationTopic}",
+##                        "Protocol": "email",
+##                        "Endpoint.$": "$.email",
+##                        "Attributes": {
+##                          "FilterPolicy": "{\"user_id\": [\"$.user_id\"]}"
+##                        }
+##                      },
+##                      "End": true
+##                    }
+##                  }
+##                },
+##                {
+##                  "StartAt": "SubscribeClosed",
+##                  "States": {
+##                    "SubscribeClosed": {
+##                      "Type": "Task",
+##                      "Resource": "arn:aws:states:::aws-sdk:sns:subscribe",
+##                      "Parameters": {
+##                        "TopicArn": "${ClosedTasksNotificationTopic}",
+##                        "Protocol": "email",
+##                        "Endpoint.$": "$.email",
+##                        "Attributes": {
+##                          "FilterPolicy": "{\"assignee_id\": [\"$.user_id\"]}"
+##                        }
+##                      },
+##                      "End": true
+##                    }
+##                  }
+##                }
+##              ],
+##              "End": true
+##            }
+##          }
+##        }
+##      RoleArn: !GetAtt StepFunctionRole.Arn
+##
+##  AdminSubscriptionStepFunction:
+##    Type: AWS::StepFunctions::StateMachine
+##    Properties:
+##      DefinitionString: !Sub |
+##        {
+##          "StartAt": "ParallelSubscribe",
+##          "States": {
+##            "ParallelSubscribe": {
+##              "Type": "Parallel",
+##              "Branches": [
+##                {
+##                  "StartAt": "SubscribeClosed",
+##                  "States": {
+##                    "SubscribeClosed": {
+##                      "Type": "Task",
+##                      "Resource": "arn:aws:states:::aws-sdk:sns:subscribe",
+##                      "Parameters": {
+##                        "TopicArn": "${ClosedTasksNotificationTopic}",
+##                        "Protocol": "email",
+##                        "Endpoint.$": "$.email",
+##                        "Attributes": {
+##                          "FilterPolicy": "{\"for_admin\": [true]}"
+##                        }
+##                      },
+##                      "End": true
+##                    }
+##                  }
+##                },
+##                {
+##                  "StartAt": "SubscribeComplete",
+##                  "States": {
+##                    "SubscribeComplete": {
+##                      "Type": "Task",
+##                      "Resource": "arn:aws:states:::aws-sdk:sns:subscribe",
+##                      "Parameters": {
+##                        "TopicArn": "${TaskCompleteNotificationTopic}",
+##                        "Protocol": "email",
+##                        "Endpoint.$": "$.email"
+##                      },
+##                      "End": true
+##                    }
+##                  }
+##                }
+##              ],
+##              "End": true
+##            }
+##          }
+##        }
+##      RoleArn: !GetAtt StepFunctionRole.Arn
+##
+##  TaskDeadlineStepFunction:
+##    Type: AWS::StepFunctions::StateMachine
+##    Properties:
+##      DefinitionString: !Sub |
+##        {
+##          "StartAt": "ParallelActions",
+##          "States": {
+##            "ParallelActions": {
+##              "Type": "Parallel",
+##              "Branches": [
+##                {
+##                  "StartAt": "UpdateTaskStatus",
+##                  "States": {
+##                    "UpdateTaskStatus": {
+##                      "Type": "Task",
+##                      "Resource": "arn:aws:states:::dynamodb:updateItem",
+##                      "Parameters": {
+##                        "TableName": "${TasksTable}",
+##                        "Key": {
+##                          "TaskID": {
+##                            "S.$": "$.task_id"
+##                          }
+##                        },
+##                        "UpdateExpression": "SET #status = :expired",
+##                        "ExpressionAttributeNames": {
+##                          "#status": "Status"
+##                        },
+##                        "ExpressionAttributeValues": {
+##                          ":expired": {
+##                            "S": "expired"
+##                          }
+##                        }
+##                      },
+##                      "End": true
+##                    }
+##                  }
+##                },
+##                {
+##                  "StartAt": "SendNotification",
+##                  "States": {
+##                    "SendNotification": {
+##                      "Type": "Task",
+##                      "Resource": "arn:aws:states:::sns:publish",
+##                      "Parameters": {
+##                        "TopicArn": "${ClosedTasksNotificationTopic}",
+##                        "Message": "Task expired",
+##                        "MessageAttributes": {
+##                          "assignee_id": {
+##                            "DataType": "String",
+##                            "StringValue.$": "$.assignee_id"
+##                          },
+##                          "for_admin": {
+##                            "DataType": "String",
+##                            "StringValue": "true"
+##                          }
+##                        }
+##                      },
+##                      "End": true
+##                    }
+##                  }
+##                }
+##              ],
+##              "End": true
+##            }
+##          }
+##        }
+##      RoleArn: !GetAtt StepFunctionRole.Arn
+##
+##  StepFunctionRole:
+##    Type: AWS::IAM::Role
+##    Properties:
+##      AssumeRolePolicyDocument:
+##        Version: '2012-10-17'
+##        Statement:
+##          - Effect: Allow
+##            Principal:
+##              Service: states.amazonaws.com
+##            Action: sts:AssumeRole
+##      Policies:
+##        - PolicyName: StepFunctionPolicy
+##          PolicyDocument:
+##            Version: '2012-10-17'
+##            Statement:
+##              - Effect: Allow
+##                Action:
+##                  - sns:Subscribe
+##                  - sns:Publish
+##                  - dynamodb:UpdateItem
+##                Resource: '*'
+##
+##  # Lambda Functions
+##  SignUpFunction:
+##    Type: AWS::Serverless::Function
+##    Properties:
+##      FunctionName: SignUpFunction
+##      CodeUri: TaskManager/
+##      Handler: auth.SignUpHandler::handleRequest
+##      Runtime: java21
+##      MemorySize: 512
+##      Timeout: 30
+##      Policies:
+##        - Version: '2012-10-17'
+##          Statement:
+##            - Effect: Allow
+##              Action:
+##                - cognito-idp:SignUp
+##                - cognito-idp:AdminConfirmSignUp
+##              Resource: !GetAtt UserPool.Arn
+##      Environment:
+##        Variables:
+##          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+##          USER_POOL_ID: !Ref UserPool
+##      Events:
+##        SignUpApi:
+##          Type: Api
+##          Properties:
+##            RestApiId: !Ref ApiGateway
+##            Path: /signup
+##            Method: POST
+##            Auth:
+##              Authorizer: NONE
+##
+##  SignInFunction:
+##    Type: AWS::Serverless::Function
+##    Properties:
+##      FunctionName: SignInFunction
+##      CodeUri: TaskManager/
+##      Handler: auth.SignInHandler::handleRequest
+##      Runtime: java21
+##      MemorySize: 512
+##      Timeout: 30
+##      Policies:
+##        - Version: '2012-10-17'
+##          Statement:
+##            - Effect: Allow
+##              Action:
+##                - cognito-idp:InitiateAuth
+##              Resource: !GetAtt UserPool.Arn
+##      Environment:
+##        Variables:
+##          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+##      Events:
+##        SignInApi:
+##          Type: Api
+##          Properties:
+##            RestApiId: !Ref ApiGateway
+##            Path: /signin
+##            Method: POST
+##            Auth:
+##              Authorizer: NONE
+##
+##  ConfirmSignUpFunction:
+##    Type: AWS::Serverless::Function
+##    Properties:
+##      FunctionName: ConfirmSignUpFunction
+##      CodeUri: TaskManager/
+##      Handler: auth.ConfirmSignUpHandler::handleRequest
+##      Runtime: java21
+##      MemorySize: 512
+##      Timeout: 30
+##      Policies:
+##        - Version: '2012-10-17'
+##          Statement:
+##            - Effect: Allow
+##              Action:
+##                - cognito-idp:ConfirmSignUp
+##              Resource: "*"
+##      Environment:
+##        Variables:
+##          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+##      Events:
+##        ConfirmSignUpApi:
+##          Type: Api
+##          Properties:
+##            RestApiId: !Ref ApiGateway
+##            Path: /confirm-signup
+##            Method: POST
+##            Auth:
+##              Authorizer: NONE
+##
+##  ResendConfirmationCodeFunction:
+##    Type: AWS::Serverless::Function
+##    Properties:
+##      FunctionName: ResendConfirmationCodeFunction
+##      CodeUri: TaskManager/
+##      Handler: auth.ResendConfirmationCodeHandler::handleRequest
+##      Runtime: java21
+##      MemorySize: 512
+##      Timeout: 30
+##      Policies:
+##        - Version: '2012-10-17'
+##          Statement:
+##            - Effect: Allow
+##              Action:
+##                - cognito-idp:ResendConfirmationCode
+##              Resource: "*"
+##      Environment:
+##        Variables:
+##          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+##      Events:
+##        ResendConfirmationCodeApi:
+##          Type: Api
+##          Properties:
+##            RestApiId: !Ref ApiGateway
+##            Path: /resend-confirmation-code
+##            Method: POST
+##            Auth:
+##              Authorizer: NONE
+##
+##  ChangePasswordFunction:
+##    Type: AWS::Serverless::Function
+##    Properties:
+##      FunctionName: ChangePasswordFunction
+##      CodeUri: TaskManager/
+##      Handler: auth.ChangePasswordHandler::handleRequest
+##      Runtime: java21
+##      MemorySize: 512
+##      Timeout: 30
+##      Policies:
+##        - Version: '2012-10-17'
+##          Statement:
+##            - Effect: Allow
+##              Action:
+##                - cognito-idp:ChangePassword
+##              Resource: "*"
+##      Environment:
+##        Variables:
+##          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+##      Events:
+##        ChangePasswordApi:
+##          Type: Api
+##          Properties:
+##            RestApiId: !Ref ApiGateway
+##            Path: /change-password
+##            Method: POST
+##            Auth:
+##              Authorizer: CognitoAuthorizer
+##
+##  ForgotPasswordFunction:
+##    Type: AWS::Serverless::Function
+##    Properties:
+##      FunctionName: ForgotPasswordFunction
+##      CodeUri: TaskManager/
+##      Handler: auth.ForgotPasswordHandler::handleRequest
+##      Runtime: java21
+##      MemorySize: 512
+##      Timeout: 30
+##      Policies:
+##        - Version: '2012-10-17'
+##          Statement:
+##            - Effect: Allow
+##              Action:
+##                - cognito-idp:ForgotPassword
+##              Resource: "*"
+##      Environment:
+##        Variables:
+##          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+##      Events:
+##        ForgotPasswordApi:
+##          Type: Api
+##          Properties:
+##            RestApiId: !Ref ApiGateway
+##            Path: /forgot-password
+##            Method: POST
+##            Auth:
+##              Authorizer: NONE
+##
+##  ConfirmForgotPasswordFunction:
+##    Type: AWS::Serverless::Function
+##    Properties:
+##      FunctionName: ConfirmForgotPasswordFunction
+##      CodeUri: TaskManager/
+##      Handler: auth.ConfirmForgotPasswordHandler::handleRequest
+##      Runtime: java21
+##      MemorySize: 512
+##      Timeout: 30
+##      Policies:
+##        - Version: '2012-10-17'
+##          Statement:
+##            - Effect: Allow
+##              Action:
+##                - cognito-idp:ConfirmForgotPassword
+##              Resource: "*"
+##      Environment:
+##        Variables:
+##          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+##      Events:
+##        ConfirmForgotPasswordApi:
+##          Type: Api
+##          Properties:
+##            RestApiId: !Ref ApiGateway
+##            Path: /confirm-forgot-password
+##            Method: POST
+##            Auth:
+##              Authorizer: NONE
+##
+##  SignOutFunction:
+##    Type: AWS::Serverless::Function
+##    Properties:
+##      FunctionName: SignOutFunction
+##      CodeUri: TaskManager/
+##      Handler: auth.SignOutHandler::handleRequest
+##      Runtime: java21
+##      MemorySize: 512
+##      Timeout: 30
+##      Policies:
+##        - Version: '2012-10-17'
+##          Statement:
+##            - Effect: Allow
+##              Action:
+##                - cognito-idp:GlobalSignOut
+##              Resource: !GetAtt UserPool.Arn
+##      Environment:
+##        Variables:
+##          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+##      Events:
+##        SignOutApi:
+##          Type: Api
+##          Properties:
+##            RestApiId: !Ref ApiGateway
+##            Path: /signout
+##            Method: POST
+##            Auth:
+##              Authorizer: CognitoAuthorizer
+##
+##  RefreshTokenFunction:
+##    Type: AWS::Serverless::Function
+##    Properties:
+##      FunctionName: RefreshTokenFunction
+##      CodeUri: TaskManager/
+##      Handler: auth.RefreshTokenHandler::handleRequest
+##      Runtime: java21
+##      MemorySize: 512
+##      Timeout: 30
+##      Policies:
+##        - Version: '2012-10-17'
+##          Statement:
+##            - Effect: Allow
+##              Action:
+##                - cognito-idp:InitiateAuth
+##              Resource: !GetAtt UserPool.Arn
+##      Environment:
+##        Variables:
+##          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+##      Events:
+##        RefreshTokenApi:
+##          Type: Api
+##          Properties:
+##            RestApiId: !Ref ApiGateway
+##            Path: /refresh-token
+##            Method: POST
+##            Auth:
+##              Authorizer: NONE
+##
+##  ProtectedFunction:
+##    Type: AWS::Serverless::Function
+##    Properties:
+##      FunctionName: ProtectedFunction
+##      CodeUri: TaskManager/
+##      Handler: auth.ProtectedHandler::handleRequest
+##      Runtime: java21
+##      MemorySize: 512
+##      Timeout: 30
+##      Events:
+##        ProtectedApi:
+##          Type: Api
+##          Properties:
+##            RestApiId: !Ref ApiGateway
+##            Path: /protected
+##            Method: GET
+##            Auth:
+##              Authorizer: CognitoAuthorizer
+##
+##  AdminCreateUserFunction:
+##    Type: AWS::Serverless::Function
+##    Properties:
+##      FunctionName: AdminCreateUserFunction
+##      CodeUri: TaskManager/
+##      Handler: auth.AdminCreateUserHandler::handleRequest
+##      Runtime: java21
+##      MemorySize: 512
+##      Timeout: 30
+##      Policies:
+##        - Version: '2012-10-17'
+##          Statement:
+##            - Effect: Allow
+##              Action:
+##                - cognito-idp:AdminGetUser
+##                - cognito-idp:ListGroupsForUser
+##              Resource: !GetAtt UserPool.Arn
+##      Environment:
+##        Variables:
+##          USER_POOL_ID: !Ref UserPool
+##      Events:
+##        AdminCreateUserApi:
+##          Type: Api
+##          Properties:
+##            RestApiId: !Ref ApiGateway
+##            Path: /admin/user
+##            Method: GET
+##            Auth:
+##              Authorizer: CognitoAuthorizer
+##
+##  CreateTaskFunction:
+##    Type: AWS::Serverless::Function
+##    Properties:
+##      CodeUri: TaskManager/
+##      Handler: helloworld.CreateTaskHandler::handleRequest
+##      Runtime: java21
+##      MemorySize: 512
+##      Timeout: 30
+##      Policies:
+##        - DynamoDBCrudPolicy:
+##            TableName: !Ref TasksTable
+##        - Statement:
+##            - Effect: Allow
+##              Action:
+##                - sqs:SendMessage
+##              Resource: !GetAtt TaskAssignmentQueue.Arn
+##      Environment:
+##        Variables:
+##          TASKS_TABLE: !Ref TasksTable
+##          TASK_ASSIGNMENT_QUEUE: !Ref TaskAssignmentQueue
+##      Events:
+##        Api:
+##          Type: Api
+##          Properties:
+##            Path: /tasks
+##            Method: POST
+##
+##  ProcessTaskAssignmentFunction:
+##    Type: AWS::Serverless::Function
+##    Properties:
+##      CodeUri: TaskManager/
+##      Handler: helloworld.ProcessTaskAssignmentHandler::handleRequest
+##      Runtime: java21
+##      MemorySize: 512
+##      Timeout: 30
+##      Policies:
+##        - DynamoDBReadPolicy:
+##            TableName: !Ref UsersTable
+##        - Statement:
+##            - Effect: Allow
+##              Action:
+##                - sns:Publish
+##              Resource: !Ref TaskAssignmentNotificationTopic
+##      Environment:
+##        Variables:
+##          USERS_TABLE: !Ref UsersTable
+##          SNS_TOPIC_ARN: !Ref TaskAssignmentNotificationTopic
+##      Events:
+##        SqsEvent:
+##          Type: SQS
+##          Properties:
+##            Queue: !GetAtt TaskAssignmentQueue.Arn
+##            BatchSize: 10
+##
+###  ProcessTaskCreationQueueFunction:
+###    Type: AWS::Serverless::Function
+###    Properties:
+###      Handler: taskManagement.handlers.ProcessTaskCreationQueueHandler::handleRequest
+###      Runtime: java21
+###      CodeUri: ./backend/
+###      MemorySize: 512
+###      Timeout: 30
+###      Environment:
+###        Variables:
+###          TASKS_TABLE: !Ref TasksTable
+###          TASK_ASSIGNMENT_TOPIC_ARN: !Ref TaskAssignmentNotificationTopic
+###      Policies:
+###        - DynamoDBCrudPolicy:
+###            TableName: !Ref TasksTable
+###        - SNSPublishMessagePolicy:
+###            TopicName: !GetAtt TaskAssignmentNotificationTopic.TopicName
+###      Events:
+###        SQSEvent:
+###          Type: SQS
+###          Properties:
+###            Queue: !GetAtt TaskCreationQueue.Arn
+###            BatchSize: 10
+###
+##  GetTasksFunction:
+##    Type: AWS::Serverless::Function
+##    Properties:
+##      CodeUri: TaskManager/
+##      Handler: helloworld.GetTasks::handleRequest
+##      Environment:
+##        Variables:
+##          TASK_TABLE_NAME: !Ref TaskTable
+##      Events:
+##        GetTasksApi:
+##          Type: Api
+##          Properties:
+##            Path: /tasks
+##            Method: get
+##      Policies:
+##        - DynamoDBReadPolicy:
+##            TableName: !Ref TaskTable
+##
+##  GetTaskFunction:
+##    Type: AWS::Serverless::Function
+##    Properties:
+##      CodeUri: TaskManager/
+##      Handler: helloworld.GetTask::handleRequest
+##      Environment:
+##        Variables:
+##          TASK_TABLE_NAME: !Ref TaskTable
+##      Events:
+##        GetTask:
+##          Type: Api
+##          Properties:
+##            Path: /tasks/{taskId}
+##            Method: get
+##      Policies:
+##        - DynamoDBReadPolicy:
+##            TableName: !Ref TaskTable
+##
+##  GetTaskAnalyticsFunction:
+##    Type: AWS::Serverless::Function
+##    Properties:
+##      CodeUri: TaskManager/
+##      Handler: helloworld.GetTaskAnalytics::handleRequest
+##      Environment:
+##        Variables:
+##          TASK_TABLE_NAME: !Ref TaskTable
+##      Events:
+##        GetTasksApi:
+##          Type: Api
+##          Properties:
+##            Path: /tasks/analytics
+##            Method: get
+##      Policies:
+##        - DynamoDBReadPolicy:
+##            TableName: !Ref TaskTable
+###
+###  OnboardUserFunction:
+###    Type: AWS::Serverless::Function
+###    Properties:
+###      Handler: taskManagement.handlers.OnboardUserHandler::handleRequest
+###      Runtime: java21
+###      CodeUri: ./backend/
+###      MemorySize: 512
+###      Timeout: 30
+###      Environment:
+###        Variables:
+###          USER_POOL_ID: !Ref UserPool
+###          TEAM_MEMBER_SFN_ARN: !Ref TeamMemberSubscriptionStepFunction
+###          ADMIN_SFN_ARN: !Ref AdminSubscriptionStepFunction
+###      Policies:
+###        - Version: '2012-10-17'
+###          Statement:
+###            - Effect: Allow
+###              Action:
+###                - cognito-idp:AdminCreateUser
+###                - cognito-idp:AdminAddUserToGroup
+###                - states:StartExecution
+###              Resource: '*'
+##
+##  # API Gateway
+###  ApiGateway:
+###    Type: AWS::Serverless::Api
+###    Properties:
+###      StageName: prod
+###      Auth:
+###        DefaultAuthorizer: CognitoAuthorizer
+###        Authorizers:
+###          CognitoAuthorizer:
+###            UserPoolArn: !GetAtt UserPool.Arn
+###      DefinitionBody:
+###        swagger: "2.0"
+###        info:
+###          title: TaskManagementApi
+###        paths:
+###          /tasks:
+###            post:
+###              x-amazon-apigateway-integration:
+###                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateTaskFunction.Arn}/invocations"
+###                httpMethod: POST
+###                type: aws_proxy
+###              security:
+###                - CognitoAuthorizer: [ ]
+###            get:
+###              x-amazon-apigateway-integration:
+###                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetTasksFunction.Arn}/invocations"
+###                httpMethod: POST
+###                type: aws_proxy
+###              security:
+###                - CognitoAuthorizer: [ ]
+###          /users:
+###            post:
+###              x-amazon-apigateway-integration:
+###                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnboardUserFunction.Arn}/invocations"
+###                httpMethod: POST
+###                type: aws_proxy
+###              security:
+###                - CognitoAuthorizer: [ ]
+##
+##Outputs:
+##  ApiUrl:
+##    Description: API Gateway endpoint URL
+##    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
