@@ -306,7 +306,7 @@ Resources:
   CreateTaskFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: helloworld.CreateTaskHandler::handleRequest
+      Handler: com.amalitechtaskmanager.handlers.task.CreateTaskHandler::handleRequest
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
@@ -325,7 +325,7 @@ Resources:
   ProcessTaskAssignmentFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: helloworld.ProcessTaskAssignmentHandler::handleRequest
+      Handler: com.amalitechtaskmanager.handlers.task.ProcessTaskAssignmentHandler::handleRequest
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
