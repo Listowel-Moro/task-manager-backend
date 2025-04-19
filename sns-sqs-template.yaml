@@ -43,35 +43,35 @@ Resources:
         - Key: Component
           Value: SNS-SQS
 
-#  TaskCreationDLQ:
-#    Type: AWS::SQS::Queue
-#    Properties:
-#      QueueName: TaskCreationDLQ.fifo
-#      FifoQueue: true
-#      Tags:
-#        - Key: Component
-#          Value: SNS-SQS
+  TaskCreationDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: TaskCreationDLQ.fifo
+      FifoQueue: true
+      Tags:
+        - Key: Component
+          Value: SNS-SQS
 
-#  TaskAssignmentQueue:
-#    Type: AWS::SQS::Queue
-#    Properties:
-#      QueueName: TaskAssignmentQueue.fifo
-#      FifoQueue: true
-#      ContentBasedDeduplication: true
-#      RedrivePolicy:
-#        deadLetterTargetArn: !GetAtt TaskCreationDLQ.Arn
-#        maxReceiveCount: 3
-#      Tags:
-#        - Key: Component
-#          Value: SNS-SQS
-#
-#  TaskDeadlineQueue:
-#    Type: AWS::SQS::Queue
-#    Properties:
-#      QueueName: TaskDeadlineQueue
-#      Tags:
-#        - Key: Component
-#          Value: SNS-SQS
+  TaskAssignmentQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: TaskAssignmentQueue.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt TaskCreationDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Component
+          Value: SNS-SQS
+
+  TaskDeadlineQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: TaskDeadlineQueue
+      Tags:
+        - Key: Component
+          Value: SNS-SQS
 
 Outputs:
   TaskAssignmentNotificationTopicArn:
@@ -83,9 +83,9 @@ Outputs:
   ClosedTasksNotificationTopicArn:
     Description: SNS Closed Tasks Notification Topic ARN
     Value: !Ref ClosedTasksNotificationTopic
-#  TaskCompleteNotificationTopicArn:
-#    Description: SNS Task Complete Notification Topic ARN
-#    Value: !Ref TaskCompleteNotificationTopic
-#  TaskAssignmentQueueArn:
-#    Description: SQS Task Assignment Queue ARN
-#    Value: !GetAtt TaskAssignmentQueue.Arn
+  TaskCompleteNotificationTopicArn:
+    Description: SNS Task Complete Notification Topic ARN
+    Value: !Ref TaskCompleteNotificationTopic
+  TaskAssignmentQueueArn:
+    Description: SQS Task Assignment Queue ARN
+    Value: !GetAtt TaskAssignmentQueue.Arn

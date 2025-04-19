@@ -52,6 +52,6 @@ public class ProcessTaskAssignmentHandler implements RequestHandler<SQSEvent, Vo
                 e.printStackTrace();
             }
         }
-        return null;
+ return null;
     }
 }

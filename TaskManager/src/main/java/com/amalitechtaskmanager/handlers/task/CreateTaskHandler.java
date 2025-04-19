@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.amalitechtaskmanager.model.Task;
+import com.amalitechtaskmanager.model.TaskStatus;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
@@ -26,22 +27,22 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
         try {
             Task task = objectMapper.readValue(input.getBody(), Task.class);
             if (task.getName() == null || task.getName().isEmpty() ||
-                task.getDeadline() == null || task.getDeadline().isEmpty() ||
+                task.getDeadline() == null  ||
                 task.getUserId() == null || task.getUserId().isEmpty()) {
                 return new APIGatewayProxyResponseEvent()
                         .withStatusCode(400)
                         .withBody("{\"error\": \"Name, deadline, and userId are required\"}");
             }
             task.setTaskId(UUID.randomUUID().toString());
-            task.setStatus("open");
+            task.setStatus(TaskStatus.OPEN);
             task.setDescription(task.getDescription() != null ? task.getDescription() : "");
             // Store task in DynamoDB
             Map<String, AttributeValue> item = new HashMap<>();
             item.put("taskId", AttributeValue.builder().s(task.getTaskId()).build());
             item.put("name", AttributeValue.builder().s(task.getName()).build());
             item.put("description", AttributeValue.builder().s(task.getDescription()).build());
-            item.put("status", AttributeValue.builder().s(task.getStatus()).build());
-            item.put("deadline", AttributeValue.builder().s(task.getDeadline()).build());
+            item.put("status", AttributeValue.builder().s(task.getStatus().toString()).build());
+            item.put("deadline", AttributeValue.builder().s(task.getDeadline().toString()).build());
             item.put("userId", AttributeValue.builder().s(task.getUserId()).build());
             dynamoDbClient.putItem(PutItemRequest.builder()
                     .tableName(tasksTable)

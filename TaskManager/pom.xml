@@ -34,6 +34,11 @@
         <artifactId>dynamodb-enhanced</artifactId>
         <version>${aws.sdk.version}</version>
     </dependency>
+       <dependency>
+           <groupId>software.amazon.awssdk</groupId>
+           <artifactId>scheduler</artifactId>
+           <version>${aws.sdk.version}</version>
+       </dependency>
     <dependency>
         <groupId>software.amazon.awssdk</groupId>
         <artifactId>cognitoidentityprovider</artifactId>
@@ -59,6 +64,7 @@
         <artifactId>eventbridge</artifactId>
         <version>${aws.sdk.version}</version>
     </dependency>
+
 
     <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>

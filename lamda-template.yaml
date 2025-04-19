@@ -74,235 +74,6 @@ Resources:
         - Key: Component
           Value: Lambda
 
-  SignUpFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: SignUpFunction
-      Handler: auth.SignUpHandler::handleRequest
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
-          USER_POOL_ID: !Ref UserPoolId
-      Events:
-        SignUpApi:
-          Type: Api
-          Properties:
-            Path: /signup
-            Method: POST
-            Auth:
-              Authorizer: NONE
-      Tags:
-        - Key: Component
-          Value: Lambda
-
-  SignInFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: SignInFunction
-      Handler: auth.SignInHandler::handleRequest
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
-      Events:
-        SignInApi:
-          Type: Api
-          Properties:
-            Path: /signin
-            Method: POST
-            Auth:
-              Authorizer: NONE
-      Tags:
-        - Key: Component
-          Value: Lambda
-
-  ConfirmSignUpFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: ConfirmSignUpFunction
-      Handler: auth.ConfirmSignUpHandler::handleRequest
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
-      Events:
-        ConfirmSignUpApi:
-          Type: Api
-          Properties:
-            Path: /confirm-signup
-            Method: POST
-            Auth:
-              Authorizer: NONE
-      Tags:
-        - Key: Component
-          Value: Lambda
-
-  ResendConfirmationCodeFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: ResendConfirmationCodeFunction
-      Handler: auth.ResendConfirmationCodeHandler::handleRequest
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
-      Events:
-        ResendConfirmationCodeApi:
-          Type: Api
-          Properties:
-            Path: /resend-confirmation-code
-            Method: POST
-            Auth:
-              Authorizer: NONE
-      Tags:
-        - Key: Component
-          Value: Lambda
-
-  ChangePasswordFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: ChangePasswordFunction
-      Handler: auth.ChangePasswordHandler::handleRequest
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
-      Events:
-        ChangePasswordApi:
-          Type: Api
-          Properties:
-            Path: /change-password
-            Method: POST
-            Auth:
-              Authorizer: CognitoAuthorizer
-      Tags:
-        - Key: Component
-          Value: Lambda
-
-  ForgotPasswordFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: ForgotPasswordFunction
-      Handler: auth.ForgotPasswordHandler::handleRequest
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
-      Events:
-        ForgotPasswordApi:
-          Type: Api
-          Properties:
-            Path: /forgot-password
-            Method: POST
-            Auth:
-              Authorizer: NONE
-      Tags:
-        - Key: Component
-          Value: Lambda
-
-  ConfirmForgotPasswordFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: ConfirmForgotPasswordFunction
-      Handler: auth.ConfirmForgotPasswordHandler::handleRequest
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
-      Events:
-        ConfirmForgotPasswordApi:
-          Type: Api
-          Properties:
-            Path: /confirm-forgot-password
-            Method: POST
-            Auth:
-              Authorizer: NONE
-      Tags:
-        - Key: Component
-          Value: Lambda
-
-  SignOutFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: SignOutFunction
-      Handler: auth.SignOutHandler::handleRequest
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
-      Events:
-        SignOutApi:
-          Type: Api
-          Properties:
-            Path: /signout
-            Method: POST
-            Auth:
-              Authorizer: CognitoAuthorizer
-      Tags:
-        - Key: Component
-          Value: Lambda
-
-  RefreshTokenFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: RefreshTokenFunction
-      Handler: auth.RefreshTokenHandler::handleRequest
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Environment:
-        Variables:
-          USER_POOL_CLIENT_ID: !Ref UserPoolClientId
-      Events:
-        RefreshTokenApi:
-          Type: Api
-          Properties:
-            Path: /refresh-token
-            Method: POST
-            Auth:
-              Authorizer: NONE
-      Tags:
-        - Key: Component
-          Value: Lambda
-
-  ProtectedFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: ProtectedFunction
-      Handler: auth.ProtectedHandler::handleRequest
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Events:
-        ProtectedApi:
-          Type: Api
-          Properties:
-            Path: /protected
-            Method: GET
-            Auth:
-              Authorizer: CognitoAuthorizer
-      Tags:
-        - Key: Component
-          Value: Lambda
-
-  AdminCreateUserFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: AdminCreateUserFunction
-      Handler: auth.AdminCreateUserHandler::handleRequest
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Environment:
-        Variables:
-          USER_POOL_ID: !Ref UserPoolId
-      Events:
-        AdminCreateUserApi:
-          Type: Api
-          Properties:
-            Path: /admin/user
-            Method: GET
-            Auth:
-              Authorizer: CognitoAuthorizer
-      Tags:
-        - Key: Component
-          Value: Lambda
-
   CreateTaskFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -319,8 +90,7 @@ Resources:
             Path: /tasks
             Method: POST
       Tags:
-        - Key: Component
-          Value: Lambda
+        Component: Lambda
 
   ProcessTaskAssignmentFunction:
     Type: AWS::Serverless::Function
@@ -337,8 +107,7 @@ Resources:
             Queue: !Ref TaskAssignmentQueueArn
             BatchSize: 10
       Tags:
-        - Key: Component
-          Value: Lambda
+        Component: Lambda
 
   GetAdminTasksFunction:
     Type: AWS::Serverless::Function
@@ -360,7 +129,7 @@ Resources:
   GetAdminTaskFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: com.amalitechtaskmanager.handlers.task.GetAdminTaskHandler::handleRequest
+      Handler: com.amalitechtaskmanager.handlers.task.MemberGetTaskHandler::handleRequest
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
@@ -372,26 +141,58 @@ Resources:
             Path: /tasks/{taskId}
             Method: GET
       Tags:
-        - Key: Component
-          Value: Lambda
+        Component: Lambda
 
-  GetAdminTaskAnalyticsFunction:
+  # Notification Lambda's
+  CreateDeadlineEventLambda:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: com.amalitechtaskmanager.handlers.task.GetAdminAnalyticsHandler::handleRequest
-      Role: !GetAtt LambdaExecutionRole.Arn
+      FunctionName: !Sub CreateDeadlineEventLambda-${Environment}
+      Handler: com.amalitechtaskmanager.handlers.notification.CreateDeadlineEvent::handleRequest
+      CodeUri: TaskManager/
+      Description: Lambda function to create deadline events from DynamoDB Streams
       Environment:
         Variables:
-          TASK_TABLE_NAME: !Ref TasksTableName
+          SCHEDULER_ROLE_ARN: !GetAtt EventBridgeSchedulerRole.Arn
+          TARGET_LAMBDA_ARN: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ReminderProcessorLambda-${Environment}
+          TABLE_NAME: !Ref TasksTable
+          ACCOUNT_ID: !Ref AccountId
+          REGION: !Ref Region
+
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref TasksTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:DescribeStream
+                - dynamodb:GetRecords
+                - dynamodb:GetShardIterator
+                - dynamodb:ListStreams
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !GetAtt TasksTable.StreamArn
+        - Statement:
+            - Effect: Allow
+              Action:
+                - scheduler:CreateSchedule
+              Resource: !Sub arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*
+            - Effect: Allow
+              Action: iam:PassRole
+              Resource: !GetAtt EventBridgeSchedulerRole.Arn
       Events:
-        GetAdminAnalyticsApi:
-          Type: Api
+        DynamoStream:
+          Type: DynamoDB
           Properties:
-            Path: /tasks/analytics
-            Method: GET
-      Tags:
-        - Key: Component
-          Value: Lambda
+            Stream: !GetAtt TasksTable.StreamArn
+            StartingPosition: LATEST
+            BatchSize: 10
+            Enabled: true
+            # Filter events to only those with status "CREATED"
+            FilterCriteria:
+              Filters:
+                - Pattern: '{"dynamodb": {NewImage: {"status": {"S": ["CREATED", "MODIFIED"]}}}}'
 
 Outputs:
   ApiUrl:
