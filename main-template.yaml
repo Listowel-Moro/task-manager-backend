@@ -56,7 +56,47 @@ Resources:
         - Key: Component
           Value: DynamoDB
 
+  EventStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: event-template.yaml
+      Parameters:
+        Environment: Production  # Or use a parameter from main template
+      Tags:
+        - Key: Component
+          Value: Events
+  NotificationStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: notification-lambda-template.yaml
+      Parameters:
+        Environment: Production
+        TasksTableArn: !GetAtt DynamoDBStack.Outputs.TasksTableArn  # Assuming you have a DynamoDB stack
+        TasksTableName: !GetAtt DynamoDBStack.Outputs.TasksTableName
+        TasksTableStreamArn: !GetAtt DynamoDBStack.Outputs.TasksTableStreamArn
+        UserPoolId: !GetAtt CognitoStack.Outputs.UserPoolId
+        NotificationTopicArn: !GetAtt SnsSqsStack.Outputs.EmailNotificationTopicArn
+        EventBridgeSchedulerRoleArn: !GetAtt EventStack.Outputs.EventBridgeSchedulerRoleArn
+        AccountId: !Ref AWS::AccountId
+        Region: !Ref AWS::Region
+        TaskDeadlineNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskDeadlineNotificationTopicArn
+      Tags:
+        - Key: Component
+          Value: Notification
 Outputs:
   ApiUrlCognito:
     Description: API Gateway endpoint URL
     Value: !GetAtt CognitoStack.Outputs.ApiUrl
+
+  EventBridgeSchedulerRoleArn:
+    Description: EventBridge Scheduler Role ARN
+    Value: !GetAtt EventStack.Outputs.EventBridgeSchedulerRoleArn
+  CreateDeadlineEventLambdaArn:
+    Description: ARN of the Create Deadline Event Lambda
+    Value: !GetAtt NotificationStack.Outputs.CreateDeadlineEventLambdaArn
+  ReminderProcessorLambdaArn:
+    Description: ARN of the Reminder Processor Lambda
+    Value: !GetAtt NotificationStack.Outputs.ReminderProcessorLambdaArn
+  UpdateTaskScheduleLambdaArn:
+    Description: ARN of the Update Task Schedule Lambda
+    Value: !GetAtt NotificationStack.Outputs.UpdateTaskScheduleLambdaArn
