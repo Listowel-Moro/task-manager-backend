@@ -75,6 +75,6 @@ public class ProcessTaskAssignmentHandler implements RequestHandler<SQSEvent, Vo
                 context.getLogger().log("Error processing message: " + e.getMessage());
             }
         }
-        return null;
+ return null;
     }
 }

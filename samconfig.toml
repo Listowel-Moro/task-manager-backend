@@ -16,6 +16,11 @@ lint = true
 capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
 confirm_changeset = true
 resolve_s3 = true
+stack_name = "taks-manager-stack"
+s3_prefix = "taks-manager-stack"
+region = "eu-central-1"
+profile = "dev-profile"
+image_repositories = []
 
 [default.package.parameters]
 resolve_s3 = true

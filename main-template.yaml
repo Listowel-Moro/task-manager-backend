@@ -9,7 +9,7 @@ Resources:
       TemplateURL: cognito-template.yaml
       Parameters:
         TeamMemberSubscriptionStepFunctionArn: !GetAtt StepFunctionsStack.Outputs.TeamMemberSubscriptionStepFunctionArn
-        TaskAssignmentNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentNotificationTopicArn  # Changed from TaskAssignmentNotificationTopic
+        TaskAssignmentNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentNotificationTopicArn
       Tags:
         - Key: Component
           Value: Cognito
@@ -33,6 +33,28 @@ Resources:
       Tags:
         - Key: Component
           Value: StepFunctions
+
+  LambdaFunctionsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: lamda-template.yaml
+      Parameters:
+        UserPoolId: !GetAtt CognitoStack.Outputs.UserPoolId
+        UserPoolClientId: !GetAtt CognitoStack.Outputs.UserPoolClientId
+        TasksTableName: !GetAtt DynamoDBStack.Outputs.TasksTableName
+        TaskAssignmentQueueArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentQueueArn
+        TaskAssignmentNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentNotificationTopicArn
+      Tags:
+        - Key: Component
+          Value: LambdaFunctions
+
+  DynamoDBStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: dynamodb-template.yaml
+      Tags:
+        - Key: Component
+          Value: DynamoDB
 
 Outputs:
   ApiUrlCognito:
