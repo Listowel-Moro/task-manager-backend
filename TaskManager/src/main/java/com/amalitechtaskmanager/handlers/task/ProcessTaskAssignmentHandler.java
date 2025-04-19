@@ -1,5 +1,6 @@
-
 package com.amalitechtaskmanager.handlers.task;
+
+import java.util.HashMap;
 import java.util.Map;
 
 import com.amalitechtaskmanager.model.Task;
@@ -9,70 +10,46 @@ import com.amazonaws.services.lambda.runtime.events.SQSEvent;
 import com.amazonaws.services.lambda.runtime.events.SQSEvent.SQSMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
-import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
-import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.awssdk.services.sns.SnsClient;
+import software.amazon.awssdk.services.sns.model.MessageAttributeValue;
 import software.amazon.awssdk.services.sns.model.PublishRequest;
 
 public class ProcessTaskAssignmentHandler implements RequestHandler<SQSEvent, Void> {
     
-    private final DynamoDbClient dynamoDbClient = DynamoDbClient.create();
     private final SnsClient snsClient = SnsClient.create();
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final String usersTable = System.getenv("USERS_TABLE");
-    private final String fifoTopicArn = System.getenv("SNS_TOPIC_ARN");
-    private final String emailTopicArn = System.getenv("EMAIL_NOTIFICATION_TOPIC_ARN");
+    private final String taskNotificationTopicArn = System.getenv("SNS_TOPIC_ARN");
     
     @Override
     public Void handleRequest(SQSEvent event, Context context) {
         for (SQSMessage message : event.getRecords()) {
             try {
                 Task taskAssignment = objectMapper.readValue(message.getBody(), Task.class);
+                String userId = taskAssignment.getUserId();
                 
-                // Get user information
-                GetItemResponse userResponse = dynamoDbClient.getItem(GetItemRequest.builder()
-                        .tableName(usersTable)
-                        .key(Map.of("userId", AttributeValue.builder().s(taskAssignment.getUserId()).build()))
-                        .build());
-                
-                if (userResponse.hasItem()) {
-                    Map<String, AttributeValue> user = userResponse.item();
+                if (userId != null && !userId.isEmpty()) {
+                    // Process task assignment in the system
+                    // Send notification to the FIFO topic with user_id as message attribute for filtering
+                    Map<String, MessageAttributeValue> messageAttributes = new HashMap<>();
+                    messageAttributes.put("user_id", MessageAttributeValue.builder()
+                            .dataType("String")
+                            .stringValue(userId)
+                            .build());
                     
-                    // Check if user is subscribed to tasks
-                    boolean subscribedToTasks = user.containsKey("subscribedToTasks") && 
-                                               user.get("subscribedToTasks").bool();
-                    
-                    if (subscribedToTasks) {
-                        // Process task assignment in the system
-                        // This is your system-level notification via FIFO topic
-                        snsClient.publish(PublishRequest.builder()
-                                .topicArn(fifoTopicArn)
-                                .message(objectMapper.writeValueAsString(taskAssignment))
-                                .messageGroupId(taskAssignment.getUserId())
-                                .messageDeduplicationId(taskAssignment.getTaskId())
-                                .build());
-                        
-                        // If user wants email notifications, send via standard topic
-                        boolean receiveNotifications = user.containsKey("receiveNotifications") && 
-                                                      user.get("receiveNotifications").bool();
-                        
-                        if (receiveNotifications && emailTopicArn != null) {
-                            String email = user.get("email").s();
-                            String taskTitle = taskAssignment.getDescription();
-                            String messageBody = "You have been assigned a new task: " + taskTitle;
-                            
-                            snsClient.publish(PublishRequest.builder()
-                                    .topicArn(emailTopicArn)
-                                    .subject("New Task Assignment")
-                                    .message(messageBody)
-                                    .build());
-                        }
-                    }
+                    // Publish to the notification topic with filtering attributes
+                    snsClient.publish(PublishRequest.builder()
+                            .topicArn(taskNotificationTopicArn)
+                            .message(objectMapper.writeValueAsString(taskAssignment))
+                            .messageAttributes(messageAttributes)
+                            .messageGroupId(userId)
+                            .messageDeduplicationId(taskAssignment.getTaskId())
+                            .build());
+                } else {
+                    context.getLogger().log("Skipping task with missing userId: " + taskAssignment.getTaskId());
                 }
             } catch (Exception e) {
                 context.getLogger().log("Error processing message: " + e.getMessage());
+                e.printStackTrace();
             }
         }
         return null;
