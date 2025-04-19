@@ -1,5 +1,8 @@
 package com.amalitechtaskmanager.handlers.notification;
 
+import com.amalitechtaskmanager.model.Task;
+import com.amalitechtaskmanager.utils.DynamoDbUtils;
+import com.amalitechtaskmanager.utils.SchedulerUtils;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.DynamodbEvent;
@@ -13,13 +16,13 @@ import software.amazon.awssdk.services.scheduler.model.FlexibleTimeWindow;
 import software.amazon.awssdk.services.scheduler.model.ScheduleState;
 import software.amazon.awssdk.services.scheduler.model.Target;
 
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
-public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Void> {
+public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Optional<Void>> {
 
     private static final Logger logger = LoggerFactory.getLogger(CreateDeadlineEvent.class);
 
@@ -28,110 +31,72 @@ public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Void> 
     private static final long REMINDER_OFFSET_MINUTES = 60;
 
     private final SchedulerClient schedulerClient;
+    private final SchedulerUtils schedulerUtils;
 
-    public CreateDeadlineEvent() {
+    public CreateDeadlineEvent(SchedulerUtils schedulerUtils) {
+        this.schedulerUtils = schedulerUtils;
         this.schedulerClient = SchedulerClient.create();
     }
 
     @Override
-
-    public Void handleRequest(DynamodbEvent event, Context context) {
+    public Optional<Void> handleRequest(DynamodbEvent event, Context context) {
+        if (TARGET_LAMBDA_ARN == null || SCHEDULER_ROLE_ARN == null) {
+            logger.error("Environment variables TARGET_LAMBDA_ARN or SCHEDULER_ROLE_ARN are not set");
+            throw new IllegalStateException("Required environment variables are not set");
+        }
         for (DynamodbStreamRecord record : event.getRecords()) {
             String eventName = record.getEventName();
-            if ("INSERT".equals(eventName) || "MODIFY".equals(eventName)) {
-                try {
-                    Map<String, AttributeValue> newImage = record.getDynamodb().getNewImage();
-                    if (newImage == null) {
-                        logger.warn("No newImage found for {} event", eventName);
-                        continue;
-                    }
-
-                    String taskId = getSafeString(newImage, "taskId");
-                    if (taskId == null) {
-                        logger.warn("taskId missing in event {}", eventName);
-                        continue;
-                    }
-                    logger.info("Processing {} event for taskId: {}", eventName, taskId);
-
-                    String deadlineStr = getSafeString(newImage, "deadline");
-                    if (deadlineStr == null) {
-                        logger.warn("No deadline found for taskId: {}", taskId);
-                        continue;
-                    }
-
-                    OffsetDateTime deadline;
-                    try {
-                        deadline = OffsetDateTime.parse(deadlineStr, DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-                    } catch (DateTimeParseException e) {
-                        logger.error("Invalid deadline format for taskId: {}: {}", taskId, deadlineStr);
-                        continue;
-                    }
-
-                    OffsetDateTime reminderTime = deadline.minusMinutes(REMINDER_OFFSET_MINUTES);
-                    OffsetDateTime now = OffsetDateTime.now();
-
-                    if (reminderTime.isBefore(now)) {
-                        logger.warn("Reminder time {} is in the past for taskId: {}", reminderTime, taskId);
-                        continue;
-                    }
-                    logger.info("Creating schedule for taskId: {} at {}", taskId, reminderTime);
-                    createSchedule(taskId, reminderTime, newImage);
-                    logger.debug("Record details: {}", newImage);
-
-                } catch (Exception e) {
-                    logger.error("Error processing record for event {}: {}", eventName, e.getMessage(), e);
-                }
-            } else {
+            if (!"INSERT".equals(eventName) && !"MODIFY".equals(eventName)) {
                 logger.debug("Skipping event: {}", eventName);
+                continue;
+            }
+
+            try {
+                Map<String, AttributeValue> newImage = record.getDynamodb().getNewImage();
+                if (newImage == null) {
+                    logger.warn("No newImage found for {} event", eventName);
+                    continue;
+                }
+
+                Optional<Task> optionalTask = DynamoDbUtils.parseTask(newImage);
+                if (optionalTask.isEmpty()) {
+                    logger.warn("Failed to parse task object from record");
+                    continue;
+                }
+
+                Task task = optionalTask.get();
+                if (task.getTaskId() == null) {
+                    logger.warn("taskId missing in task object");
+                    continue;
+                }
+
+                logger.info("Processing {} event for taskId: {}", eventName, task.getTaskId());
+
+                LocalDateTime deadline = task.getDeadline();
+                if (deadline == null) {
+                    logger.warn("No deadline found for taskId: {}", task.getTaskId());
+                    continue;
+                }
+
+                OffsetDateTime reminderTime = deadline.atOffset(ZoneOffset.UTC).minusMinutes(REMINDER_OFFSET_MINUTES);
+                OffsetDateTime now = OffsetDateTime.now();
+
+                if (reminderTime.isBefore(now)) {
+                    logger.warn("Reminder time {} is in the past for taskId: {}", reminderTime, task.getTaskId());
+                    continue;
+                }
+
+                logger.info("Creating schedule for taskId: {} at {}", task.getTaskId(), reminderTime);
+
+                schedulerUtils.createSchedule(task.getTaskId(),reminderTime, newImage, TARGET_LAMBDA_ARN, SCHEDULER_ROLE_ARN);
+
+                logger.debug("Record details: {}", newImage);
+
+            } catch (Exception e) {
+                logger.error("Error processing record: {}", e.getMessage(), e);
             }
         }
-        return null;
-    }
 
-    private void createSchedule(String taskId, OffsetDateTime reminderTime, Map<String, AttributeValue> taskItem) {
-        try {
-            String scheduleExpression = "at(" + reminderTime.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME).replace("Z", "") + ")";
-
-            Map<String, String> inputPayload = new HashMap<>();
-            inputPayload.put("taskId", taskId);
-
-            taskItem.forEach((key, value) -> {
-                if (value.getS() != null) {
-                    inputPayload.put(key, value.getS());
-                }
-            });
-
-            logger.info("Creating EventBridge schedule for the role ARN: {}", SCHEDULER_ROLE_ARN);
-            logger.info("Creating EventBridge schedule for the target ARN: {}", TARGET_LAMBDA_ARN);
-            CreateScheduleRequest request = CreateScheduleRequest.builder()
-                    .name("TaskReminder_" + taskId)
-                    .scheduleExpression(scheduleExpression)
-                    .state(ScheduleState.ENABLED)
-                    .flexibleTimeWindow(FlexibleTimeWindow.builder().mode("OFF").build())
-                    .target(Target.builder()
-                            .arn(TARGET_LAMBDA_ARN)
-                            .roleArn(SCHEDULER_ROLE_ARN)
-                            .input(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(inputPayload))
-                            .build())
-                    .build();
-
-            schedulerClient.createSchedule(request);
-            logger.info("Created EventBridge schedule for taskId: {} at {}", taskId, reminderTime);
-
-        } catch (Exception e) {
-            logger.error("Failed to create schedule for taskId: {}: {}", taskId, e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Utility method to safely extract a String from a DynamoDB image map
-     */
-    private String getSafeString(Map<String, AttributeValue> map, String key) {
-        if (map == null) {
-            logger.warn("Map is null for key: {}", key);
-            return null;
-        }
-        AttributeValue val = map.get(key);
-        return (val != null && val.getS() != null && !val.getS().isEmpty()) ? val.getS() : null;
+        return Optional.empty();
     }
 }
