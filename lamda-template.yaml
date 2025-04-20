@@ -194,6 +194,33 @@ Resources:
               Filters:
                 - Pattern: '{"dynamodb": {NewImage: {"status": {"S": ["CREATED", "MODIFIED"]}}}}'
 
+
+
+  TaskExpirationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: TaskExpirationHandler
+      Handler: com.amalitechtaskmanager.handlers.task.TaskExpirationHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTableName
+          USERS_TABLE: !Ref UsersTableName
+          TASK_EXPIRATION_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationNotificationTopicArn
+          TASK_DEADLINE_NOTIFICATION_TOPIC_ARN: !Ref TaskDeadlineNotificationTopicArn
+      Events:
+        ScheduledEvent:
+          Type: Schedule
+          Properties:
+            Schedule: 'rate(1 day)'
+            Name: TaskExpirationCheck
+            Description: 'Daily check for expired tasks'
+            Enabled: true
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+
 Outputs:
   ApiUrl:
     Description: API Gateway endpoint URL
