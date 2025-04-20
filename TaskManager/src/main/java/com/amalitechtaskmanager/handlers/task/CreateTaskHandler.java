@@ -1,4 +1,6 @@
 package com.amalitechtaskmanager.handlers.task;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -36,10 +38,17 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
             task.setTaskId(UUID.randomUUID().toString());
             task.setStatus(TaskStatus.OPEN);
             task.setDescription(task.getDescription() != null ? task.getDescription() : "");
+            task.setCreatedAt(LocalDateTime.now());
             // Store task in DynamoDB
+
+
+            DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+            String createdAt=task.getCreatedAt().format(formatter);
+
             Map<String, AttributeValue> item = new HashMap<>();
             item.put("taskId", AttributeValue.builder().s(task.getTaskId()).build());
             item.put("name", AttributeValue.builder().s(task.getName()).build());
+            item.put("createdAt", AttributeValue.builder().s(createdAt).build());
             item.put("description", AttributeValue.builder().s(task.getDescription()).build());
             item.put("status", AttributeValue.builder().s(task.getStatus().toString()).build());
             item.put("deadline", AttributeValue.builder().s(task.getDeadline().toString()).build());

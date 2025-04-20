@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 public class Task {
 
+
     @JsonProperty("taskId")
     private String taskId;
 
@@ -30,8 +31,10 @@ public class Task {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime deadline;
 
-    @JsonProperty("responsibility")
-    private String responsibility;
+    @JsonProperty("createdAt")
+    @JsonFormat (shape = JsonFormat.Shape.STRING,pattern ="yyyy-MM-dd'T'HH:mm:ss" )
+    private LocalDateTime createdAt;
+
 
     @JsonProperty("completed_at")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
@@ -44,7 +47,7 @@ public class Task {
     private String userComment;
 
     public Task(String taskId, String name, String description, TaskStatus status,
-                LocalDateTime deadline, String responsibility,
+                LocalDateTime deadline,
                 LocalDateTime completedAt, String userComment ,String  userId) {
 
         this.taskId = taskId;
@@ -52,7 +55,6 @@ public class Task {
         this.description = description;
         this.status = status;
         this.deadline = deadline;
-        this.responsibility = responsibility;
         this.userComment = userComment;
         this.userId= userId;
 
@@ -72,4 +74,5 @@ public class Task {
             throw  new CannotSetCompletedAtException("Cannot set completedAt unless status is COMPLETED");
         }
     }
+
 }
