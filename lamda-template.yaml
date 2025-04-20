@@ -109,7 +109,24 @@ Resources:
       Tags:
         Component: Lambda
 
-  GetTaskFunction:
+  GetAdminTasksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: com.amalitechtaskmanager.handlers.task.GetAdminTasksHandler::handleRequest
+      Environment:
+        Variables:
+          TASK_TABLE_NAME: !Ref TasksTableName
+      Events:
+        GetAdminTasksApi:
+          Type: Api
+          Properties:
+            Path: /tasks
+            Method: GET
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  GetAdminTaskFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: com.amalitechtaskmanager.handlers.task.MemberGetTaskHandler::handleRequest
@@ -118,7 +135,7 @@ Resources:
         Variables:
           TASK_TABLE_NAME: !Ref TasksTableName
       Events:
-        GetTask:
+        GetAdminTask:
           Type: Api
           Properties:
             Path: /tasks/{taskId}
@@ -126,7 +143,7 @@ Resources:
       Tags:
         Component: Lambda
 
-# Notification Lambda's
+  # Notification Lambda's
   CreateDeadlineEventLambda:
     Type: AWS::Serverless::Function
     Properties:
@@ -176,7 +193,6 @@ Resources:
             FilterCriteria:
               Filters:
                 - Pattern: '{"dynamodb": {NewImage: {"status": {"S": ["CREATED", "MODIFIED"]}}}}'
-
 
 Outputs:
   ApiUrl:
