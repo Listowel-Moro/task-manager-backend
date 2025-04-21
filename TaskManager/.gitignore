@@ -1,13 +1,9 @@
-# Default ignored files
-/shelf/
-/.idea/workspace.xml
-target/
-.aws-sam/
-
+# Maven build directory and generated files
 target/
 dependency-reduced-pom.xml
 
-
+# Dummy files (they appear to be placeholder files)
+**/dummy.java
 
 # AWS SAM
 .aws-sam/

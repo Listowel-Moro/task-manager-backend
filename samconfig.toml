@@ -4,7 +4,7 @@ version = 0.1
 
 [default.global.parameters]
 stack_name = "task-manager-backend"
-template = "main-template.yaml"
+#template = "main-template.yaml"
 
 [default.build.parameters]
 cached = true
@@ -17,7 +17,7 @@ lint = true
 capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
 confirm_changeset = true
 resolve_s3 = true
-template = "main-template.yaml"
+#template = "main-template.yaml"
 
 
 [default.package.parameters]

@@ -1,3 +1,44 @@
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Task Management System Backend - Main Template
+
+Resources:
+  CognitoStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: cognito-template.yaml
+      Parameters:
+        TeamMemberSubscriptionStepFunctionArn: !GetAtt StepFunctionsStack.Outputs.TeamMemberSubscriptionStepFunctionArn
+        TaskAssignmentNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentNotificationTopicArn  # Changed from TaskAssignmentNotificationTopic
+      Tags:
+        - Key: Component
+          Value: Cognito
+
+  SnsSqsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: sns-sqs-template.yaml
+      Tags:
+        - Key: Component
+          Value: SNS-SQS
+
+  StepFunctionsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: step-functions-template.yaml
+      Parameters:
+        TaskAssignmentNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentNotificationTopicArn
+        TaskDeadlineNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskDeadlineNotificationTopicArn
+        ClosedTasksNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.ClosedTasksNotificationTopicArn
+      Tags:
+        - Key: Component
+          Value: StepFunctions
+
+Outputs:
+  ApiUrlCognito:
+    Description: API Gateway endpoint URL
+    Value: !GetAtt CognitoStack.Outputs.ApiUrl
 #AWSTemplateFormatVersion: '2010-09-09'
 #Transform: AWS::Serverless-2016-10-31
 #Description: Task Management System Backend - Main Template

@@ -54,6 +54,9 @@ Resources:
       ExplicitAuthFlows:
         - ALLOW_USER_PASSWORD_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
+      AccessTokenValidity: 5
+      IdTokenValidity: 5
+
 
   AdminUserGroup:
     Type: AWS::Cognito::UserPoolGroup
@@ -84,6 +87,27 @@ Resources:
             UserPoolArn: !GetAtt UserPool.Arn
             Identity:
               Header: Authorization
+
+#  ApiGateway:
+#    Type: AWS::Serverless::Api
+#    Properties:
+#      StageName: Prod
+#      Cors:
+#        AllowMethods: "'GET,POST,OPTIONS'"
+#        AllowHeaders: "'Content-Type,Authorization'"
+#        AllowOrigin: "'*'"
+#      Auth:
+#        DefaultAuthorizer: CognitoAuthorizer
+#        Authorizers:
+#          CognitoAuthorizer:
+#            UserPoolArn: !GetAtt UserPool.Arn
+#            Identity:
+#              Header: Authorization
+#            ValidateRequestParameters: true
+#            # Explicitly configure to use access tokens
+#            IdentitySource: method.request.header.Authorization
+#            ProviderARNs:
+#              - !GetAtt UserPool.Arn
 
 
   # Lambda Functions
@@ -185,6 +209,151 @@ Resources:
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /admin/create-member
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  ForgotPasswordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ForgotPasswordFunction
+      CodeUri: TaskManager
+      Handler: com.amalitechtaskmanager.handlers.auth.ForgotPasswordHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ForgotPassword
+              Resource: "*"
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+      Events:
+        ForgotPasswordApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /forgot-password
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  ConfirmForgotPasswordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ConfirmForgotPasswordFunction
+      CodeUri: TaskManager
+      Handler: com.amalitechtaskmanager.handlers.auth.ConfirmForgotPasswordHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ConfirmForgotPassword
+              Resource: "*"
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+      Events:
+        ConfirmForgotPasswordApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /confirm-forgot-password
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  SignOutFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SignOutFunction
+      CodeUri: TaskManager
+      Handler: com.amalitechtaskmanager.handlers.auth.SignOutHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:GlobalSignOut
+              Resource: !GetAtt UserPool.Arn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+      Events:
+        SignOutApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /signout
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  RefreshTokenFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: RefreshTokenFunction
+      CodeUri: TaskManager
+      Handler: com.amalitechtaskmanager.handlers.auth.TokenRefreshHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:InitiateAuth
+              Resource: !GetAtt UserPool.Arn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+      Events:
+        RefreshTokenApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /refresh-token
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  ChangePasswordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ChangePasswordFunction
+      CodeUri: TaskManager
+      Handler: com.amalitechtaskmanager.handlers.auth.ChangePasswordHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ChangePassword
+              Resource: "*"
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+      Events:
+        ChangePasswordApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /change-password
             Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
