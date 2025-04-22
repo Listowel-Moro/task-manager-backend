@@ -7,24 +7,25 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.fasterxml.jackson.databind.ObjectMapper;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.*;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.sns.SnsClient;
+import software.amazon.awssdk.services.sns.model.PublishRequest;
+import software.amazon.awssdk.services.sns.model.PublishResponse;
 import software.amazon.awssdk.services.sfn.SfnClient;
 import software.amazon.awssdk.services.sfn.model.StartExecutionRequest;
 import software.amazon.awssdk.services.sfn.model.StartExecutionResponse;
-import software.amazon.awssdk.regions.Region;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
+import java.util.*;
 
 public class AdminCreateMemberHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     private final CognitoIdentityProviderClient cognitoClient;
+    private final SnsClient snsClient;
     private final SfnClient sfnClient;
-    private final String userPoolId;
-    private final String teamMemberSubscriptionStepFunctionArn;
     private final ObjectMapper objectMapper;
+    private final String userPoolId;
+    private final String clientId;
+    private final String taskAssignmentTopicArn;
+    private final String teamMemberSubscriptionStepFunctionArn;
     private final Region region;
 
     public AdminCreateMemberHandler() {
@@ -37,11 +38,17 @@ public class AdminCreateMemberHandler implements RequestHandler<APIGatewayProxyR
                 .region(region)
                 .build();
 
+        this.snsClient = SnsClient.builder()
+                .region(region)
+                .build();
+
         this.sfnClient = SfnClient.builder()
                 .region(region)
                 .build();
 
         this.userPoolId = System.getenv("USER_POOL_ID");
+        this.clientId = System.getenv("USER_POOL_CLIENT_ID");
+        this.taskAssignmentTopicArn = System.getenv("TASK_ASSIGNMENT_TOPIC_ARN");
         this.teamMemberSubscriptionStepFunctionArn = System.getenv("TEAM_MEMBER_SUBSCRIPTION_STEP_FUNCTION_ARN");
         this.objectMapper = new ObjectMapper();
     }
@@ -55,159 +62,182 @@ public class AdminCreateMemberHandler implements RequestHandler<APIGatewayProxyR
         response.setHeaders(headers);
 
         try {
-            // Extract claims and check if the user is an admin
-            Map<String, Object> authorizer = input.getRequestContext().getAuthorizer();
-            if (authorizer == null) {
-                context.getLogger().log("No authorizer found in the request");
+            // Extract user info from request body
+            Map<String, Object> requestBody = objectMapper.readValue(input.getBody(), Map.class);
+            String email = (String) requestBody.get("email");
+            String name = (String) requestBody.get("name");
+            String department = (String) requestBody.get("department");
+
+            if (email == null || name == null) {
+                context.getLogger().log("Missing required parameters");
                 Map<String, String> errorResponse = new HashMap<>();
-                errorResponse.put("error", "Unauthorized: Authentication required");
-                response.setStatusCode(401);
+                errorResponse.put("error", "Missing required parameters: email and name");
+                response.setStatusCode(400);
                 response.setBody(objectMapper.writeValueAsString(errorResponse));
                 return response;
             }
 
-            Map<String, String> claims = (Map<String, String>) authorizer.get("claims");
-            if (claims == null) {
-                context.getLogger().log("No claims found in the request");
+            context.getLogger().log("Creating member user with email: " + email);
+
+            // Check if user already exists
+            try {
+                AdminGetUserRequest getUserRequest = AdminGetUserRequest.builder()
+                        .userPoolId(userPoolId)
+                        .username(email)
+                        .build();
+                cognitoClient.adminGetUser(getUserRequest);
+
+                // If we get here, user exists
+                context.getLogger().log("User already exists: " + email);
                 Map<String, String> errorResponse = new HashMap<>();
-                errorResponse.put("error", "Unauthorized: Authentication required");
-                response.setStatusCode(401);
+                errorResponse.put("error", "User with this email already exists");
+                response.setStatusCode(409); // Conflict
                 response.setBody(objectMapper.writeValueAsString(errorResponse));
                 return response;
+            } catch (UserNotFoundException e) {
+                // User doesn't exist, proceed with creation
+                context.getLogger().log("User doesn't exist, proceeding with creation");
             }
-
-            // Check if user belongs to Admins group
-            String groups = claims.get("cognito:groups");
-            if (groups == null || !groups.contains("Admins")) {
-                context.getLogger().log("User is not an admin: " + claims.get("cognito:username"));
-                Map<String, String> errorResponse = new HashMap<>();
-                errorResponse.put("error", "Forbidden: Admin privileges required");
-                response.setStatusCode(403);
-                response.setBody(objectMapper.writeValueAsString(errorResponse));
-                return response;
-            }
-
-            context.getLogger().log("Admin authorization successful: " + claims.get("cognito:username"));
-
-            // Parse request body
-            Map<String, String> requestBody = objectMapper.readValue(input.getBody(), Map.class);
-            String email = requestBody.get("email");
-            String name = requestBody.get("name");
-            String phoneNumber = requestBody.get("phoneNumber");
-
-            context.getLogger().log("Creating user with email: " + email);
-
-            // Generate a temporary password
-            String temporaryPassword = generateRandomPassword();
 
             // Create user attributes
             List<AttributeType> userAttributes = new ArrayList<>();
             userAttributes.add(AttributeType.builder().name("email").value(email).build());
-            userAttributes.add(AttributeType.builder().name("email_verified").value("true").build());
+            userAttributes.add(AttributeType.builder().name("email_verified").value("false").build());
+            userAttributes.add(AttributeType.builder().name("name").value(name).build());
 
-            if (name != null && !name.isEmpty()) {
-                userAttributes.add(AttributeType.builder().name("name").value(name).build());
+            if (department != null) {
+                userAttributes.add(AttributeType.builder().name("custom:department").value(department).build());
             }
 
-            if (phoneNumber != null && !phoneNumber.isEmpty()) {
-                userAttributes.add(AttributeType.builder().name("phone_number").value(phoneNumber).build());
-            }
-
-            // Create user in Cognito - removed messageAction(MessageActionType.SUPPRESS)
-            // to allow Cognito to automatically send welcome email with credentials
+            // Create the user - this will send temporary password email
             AdminCreateUserRequest createUserRequest = AdminCreateUserRequest.builder()
                     .userPoolId(userPoolId)
                     .username(email)
-                    .temporaryPassword(temporaryPassword)
                     .userAttributes(userAttributes)
+                    .desiredDeliveryMediums(DeliveryMediumType.EMAIL)
+                    .messageAction(MessageActionType.SUPPRESS) // Set to SUPPRESS initially
                     .build();
 
             AdminCreateUserResponse createUserResponse = cognitoClient.adminCreateUser(createUserRequest);
-            context.getLogger().log("User created successfully in Cognito");
+            context.getLogger().log("User created: " + createUserResponse.user().username());
 
-            // Add user to the Members group
+            // Add the user to the Members group
             AdminAddUserToGroupRequest addToGroupRequest = AdminAddUserToGroupRequest.builder()
                     .userPoolId(userPoolId)
                     .username(email)
                     .groupName("member")
                     .build();
-
             cognitoClient.adminAddUserToGroup(addToGroupRequest);
             context.getLogger().log("User added to member group");
 
-            // Start the Step Function to subscribe the user to all notification topics
+            // Now send a custom welcome message with the verification step
+            // Create a random initial password - this won't be used by the user but is required
+            String temporaryPassword = UUID.randomUUID().toString().substring(0, 12) + "A1!";
+
+            // Set the user's password and mark it as requiring change
+            AdminSetUserPasswordRequest setPasswordRequest = AdminSetUserPasswordRequest.builder()
+                    .userPoolId(userPoolId)
+                    .username(email)
+                    .password(temporaryPassword)
+                    .permanent(false) // User must change on first login
+                    .build();
+            cognitoClient.adminSetUserPassword(setPasswordRequest);
+
+            // Force the email verification status to false to trigger verification flow
+            AdminUpdateUserAttributesRequest updateRequest = AdminUpdateUserAttributesRequest.builder()
+                    .userPoolId(userPoolId)
+                    .username(email)
+                    .userAttributes(
+                            AttributeType.builder()
+                                    .name("email_verified")
+                                    .value("false")
+                                    .build()
+                    )
+                    .build();
+            cognitoClient.adminUpdateUserAttributes(updateRequest);
+
+            // Send verification code
+            AdminInitiateAuthRequest authRequest = AdminInitiateAuthRequest.builder()
+                    .userPoolId(userPoolId)
+                    .clientId(clientId)
+                    .authFlow(AuthFlowType.ADMIN_NO_SRP_AUTH)
+                    .authParameters(Map.of(
+                            "USERNAME", email,
+                            "PASSWORD", temporaryPassword
+                    ))
+                    .build();
+
             try {
-                // Prepare input for the Step Function
-                Map<String, String> stepFunctionInput = new HashMap<>();
-                stepFunctionInput.put("email", email);
-                stepFunctionInput.put("user_id", email); // Using email as the user_id for filtering
+                // Try to authenticate with the temp password
+                AdminInitiateAuthResponse authResponse = cognitoClient.adminInitiateAuth(authRequest);
+                context.getLogger().log("Authentication successful, challenge: " + authResponse.challengeName());
 
-                // Start execution
-                StartExecutionRequest startRequest = StartExecutionRequest.builder()
-                        .stateMachineArn(teamMemberSubscriptionStepFunctionArn)
-                        .input(objectMapper.writeValueAsString(stepFunctionInput))
-                        .build();
-
-                context.getLogger().log("Starting step function: " + teamMemberSubscriptionStepFunctionArn);
-                StartExecutionResponse startExecutionResponse = sfnClient.startExecution(startRequest);
-                context.getLogger().log("Step function started with ARN: " + startExecutionResponse.executionArn());
-
-                // Convert UserType to a Map to avoid serialization issues
-                Map<String, Object> userMap = new HashMap<>();
-                UserType user = createUserResponse.user();
-                userMap.put("username", user.username());
-                userMap.put("userStatus", user.userStatusAsString());
-                userMap.put("enabled", user.enabled());
-                userMap.put("userCreateDate", user.userCreateDate().toString());
-                userMap.put("attributes", user.attributes().stream()
-                        .collect(Collectors.toMap(
-                                AttributeType::name,
-                                AttributeType::value
-                        )));
-
-                // Prepare success response
-                Map<String, Object> responseBody = new HashMap<>();
-                responseBody.put("status", "success");
-                responseBody.put("user", userMap);
-                responseBody.put("message", "User created and added to member group. Welcome email sent by Cognito.");
-                responseBody.put("subscriptions", "User was subscribed to all notification topics");
-                responseBody.put("stepFunctionExecutionArn", startExecutionResponse.executionArn());
-
-                response.setStatusCode(200);
-                response.setBody(objectMapper.writeValueAsString(responseBody));
+                // If authentication was successful, we need to complete the auth challenge
+                // and then we can resend the verification code
+                if (authResponse.challengeName() == ChallengeNameType.NEW_PASSWORD_REQUIRED) {
+                    // We don't actually complete the challenge since user needs to set password
+                    context.getLogger().log("User needs to set a new password");
+                }
             } catch (Exception e) {
-                context.getLogger().log("Failed to start subscription step function: " + e.getMessage());
-
-                // Convert UserType to a Map to avoid serialization issues
-                Map<String, Object> userMap = new HashMap<>();
-                UserType user = createUserResponse.user();
-                userMap.put("username", user.username());
-                userMap.put("userStatus", user.userStatusAsString());
-                userMap.put("enabled", user.enabled());
-                userMap.put("userCreateDate", user.userCreateDate().toString());
-                userMap.put("attributes", user.attributes().stream()
-                        .collect(Collectors.toMap(
-                                AttributeType::name,
-                                AttributeType::value
-                        )));
-
-                // Prepare success response but with subscription warning
-                Map<String, Object> responseBody = new HashMap<>();
-                responseBody.put("status", "partial_success");
-                responseBody.put("user", userMap);
-                responseBody.put("message", "User created and added to member group. Welcome email sent by Cognito.");
-                responseBody.put("subscriptionWarning", "User was created but there was an issue with topic subscriptions: " + e.getMessage());
-
-                response.setStatusCode(200);
-                response.setBody(objectMapper.writeValueAsString(responseBody));
+                context.getLogger().log("Error authenticating with temp password: " + e.getMessage());
+                // We can still proceed even if this fails
             }
 
+            // Resend verification code
+            try {
+                ResendConfirmationCodeRequest resendRequest = ResendConfirmationCodeRequest.builder()
+                        .clientId(clientId)
+                        .username(email)
+                        .build();
+
+                ResendConfirmationCodeResponse resendResponse = cognitoClient.resendConfirmationCode(resendRequest);
+                context.getLogger().log("Verification code resent: " + resendResponse.codeDeliveryDetails().attributeName());
+            } catch (Exception e) {
+                context.getLogger().log("Error resending verification code: " + e.getMessage());
+                // Continue even if this fails
+            }
+
+            // Notify user via SNS (optional)
+            if (taskAssignmentTopicArn != null && !taskAssignmentTopicArn.isEmpty()) {
+                try {
+                    String message = "Welcome to the Task Management System! " +
+                            "Your account has been created. Please check your email for your temporary password " +
+                            "and verification code.";
+
+                    PublishRequest publishRequest = PublishRequest.builder()
+                            .topicArn(taskAssignmentTopicArn)
+                            .subject("Welcome to Task Management System")
+                            .message(message)
+                            .build();
+
+                    PublishResponse publishResponse = snsClient.publish(publishRequest);
+                    context.getLogger().log("Notification sent with message ID: " + publishResponse.messageId());
+                } catch (Exception e) {
+                    context.getLogger().log("Failed to send notification: " + e.getMessage());
+                    // Continue even if notification fails
+                }
+            }
+
+            // Return success response
+            Map<String, Object> responseBody = new HashMap<>();
+            responseBody.put("status", "success");
+            responseBody.put("message", "Member user created successfully");
+            responseBody.put("user", Map.of(
+                    "username", email,
+                    "email", email,
+                    "name", name,
+                    "created", true,
+                    "verification_required", true
+            ));
+            response.setStatusCode(200);
+            response.setBody(objectMapper.writeValueAsString(responseBody));
+
         } catch (Exception e) {
-            context.getLogger().log("Error creating user: " + e.getMessage());
+            context.getLogger().log("Error creating member user: " + e.getMessage());
             e.printStackTrace();
 
             Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("error", "Failed to create user: " + e.getMessage());
+            errorResponse.put("error", "Failed to create member user: " + e.getMessage());
 
             response.setStatusCode(500);
             try {
@@ -218,38 +248,5 @@ public class AdminCreateMemberHandler implements RequestHandler<APIGatewayProxyR
         }
 
         return response;
-    }
-
-    private String generateRandomPassword() {
-        // Generate a random password that meets Cognito requirements
-        String upperChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        String lowerChars = "abcdefghijklmnopqrstuvwxyz";
-        String numbers = "0123456789";
-        String specialChars = "!@#$%^&*()_-+=<>?";
-
-        StringBuilder password = new StringBuilder();
-
-        // Add at least one of each required character type
-        password.append(upperChars.charAt((int) (Math.random() * upperChars.length())));
-        password.append(lowerChars.charAt((int) (Math.random() * lowerChars.length())));
-        password.append(numbers.charAt((int) (Math.random() * numbers.length())));
-        password.append(specialChars.charAt((int) (Math.random() * specialChars.length())));
-
-        // Add additional random characters to meet minimum length
-        String allChars = upperChars + lowerChars + numbers + specialChars;
-        for (int i = 0; i < 8; i++) {
-            password.append(allChars.charAt((int) (Math.random() * allChars.length())));
-        }
-
-        // Shuffle the password
-        char[] passwordArray = password.toString().toCharArray();
-        for (int i = 0; i < passwordArray.length; i++) {
-            int j = (int) (Math.random() * passwordArray.length);
-            char temp = passwordArray[i];
-            passwordArray[i] = passwordArray[j];
-            passwordArray[j] = temp;
-        }
-
-        return new String(passwordArray);
     }
 }

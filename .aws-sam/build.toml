@@ -5,9 +5,9 @@ codeuri = "C:\\Users\\NicholasOppong\\Documents\\Serverless Apps\\task-manager-b
 runtime = "java21"
 architecture = "x86_64"
 handler = "com.amalitechtaskmanager.handlers.auth.SignInHandler::handleRequest"
-source_hash = "6b347aa7f2b29d7d63495579c956cc61da847b78de7b6a3ad8f9addfbf52223b"
+source_hash = "d509778e20e522889e795529d20e357784fe7fe16ece12a0ca03fc8150792f57"
 manifest_hash = ""
 packagetype = "Zip"
-functions = ["CognitoStack/SignUpFunction", "CognitoStack/SignInFunction", "CognitoStack/AdminCreateMemberFunction"]
+functions = ["CognitoStack/SignUpFunction", "CognitoStack/SignInFunction", "CognitoStack/AdminCreateMemberFunction", "CognitoStack/ForgotPasswordFunction", "CognitoStack/ConfirmForgotPasswordFunction", "CognitoStack/SignOutFunction", "CognitoStack/RefreshTokenFunction", "CognitoStack/ChangePasswordFunction", "CognitoStack/VerifyEmailFunction", "CognitoStack/ResendVerificationCodeFunction"]
 
 [layer_build_definitions]

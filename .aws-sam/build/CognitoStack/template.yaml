@@ -18,7 +18,7 @@ Resources:
       EmailVerificationMessage: Your verification code is {####}
       EmailVerificationSubject: Verify your email for our application
       AdminCreateUserConfig:
-        AllowAdminCreateUserOnly: false
+        AllowAdminCreateUserOnly: true
         InviteMessageTemplate:
           EmailSubject: Welcome to Our Application
           EmailMessage: Your username is {username} and temporary password is {####}.
@@ -51,6 +51,8 @@ Resources:
       ExplicitAuthFlows:
       - ALLOW_USER_PASSWORD_AUTH
       - ALLOW_REFRESH_TOKEN_AUTH
+      AccessTokenValidity: 5
+      IdTokenValidity: 5
   AdminUserGroup:
     Type: AWS::Cognito::UserPoolGroup
     Properties:
@@ -64,7 +66,7 @@ Resources:
       GroupName: member
       UserPoolId:
         Ref: UserPool
-      Description: Group for admin users who can create other users
+      Description: Group for regular member users
   ApiGateway:
     Type: AWS::Serverless::Api
     Properties:
@@ -100,10 +102,9 @@ Resources:
           - cognito-idp:SignUp
           - cognito-idp:AdminConfirmSignUp
           - cognito-idp:AdminAddUserToGroup
+          - cognito-idp:AdminUpdateUserAttributes
           Resource:
-            Fn::GetAtt:
-            - UserPool
-            - Arn
+            Fn::Sub: arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPool}
       Environment:
         Variables:
           USER_POOL_CLIENT_ID:
@@ -137,6 +138,7 @@ Resources:
         - Effect: Allow
           Action:
           - cognito-idp:InitiateAuth
+          - cognito-idp:AdminGetUser
           Resource:
             Fn::GetAtt:
             - UserPool
@@ -145,6 +147,8 @@ Resources:
         Variables:
           USER_POOL_CLIENT_ID:
             Ref: UserPoolClient
+          USER_POOL_ID:
+            Ref: UserPool
       Events:
         SignInApi:
           Type: Api
@@ -173,10 +177,10 @@ Resources:
           Action:
           - cognito-idp:AdminCreateUser
           - cognito-idp:AdminAddUserToGroup
+          - cognito-idp:AdminUpdateUserAttributes
+          - cognito-idp:AdminGetUser
           Resource:
-            Fn::GetAtt:
-            - UserPool
-            - Arn
+            Fn::Sub: arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPool}
         - Effect: Allow
           Action:
           - sns:Publish
@@ -191,6 +195,8 @@ Resources:
         Variables:
           USER_POOL_ID:
             Ref: UserPool
+          USER_POOL_CLIENT_ID:
+            Ref: UserPoolClient
           TASK_ASSIGNMENT_TOPIC_ARN:
             Ref: TaskAssignmentNotificationTopicArn
           TEAM_MEMBER_SUBSCRIPTION_STEP_FUNCTION_ARN:
@@ -207,6 +213,247 @@ Resources:
               Authorizer: CognitoAuthorizer
     Metadata:
       SamResourceId: AdminCreateMemberFunction
+  ForgotPasswordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ForgotPasswordFunction
+      CodeUri: ForgotPasswordFunction
+      Handler: com.amalitechtaskmanager.handlers.auth.ForgotPasswordHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:ForgotPassword
+          Resource: '*'
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID:
+            Ref: UserPoolClient
+      Events:
+        ForgotPasswordApi:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /forgot-password
+            Method: POST
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: ForgotPasswordFunction
+  ConfirmForgotPasswordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ConfirmForgotPasswordFunction
+      CodeUri: ConfirmForgotPasswordFunction
+      Handler: com.amalitechtaskmanager.handlers.auth.ConfirmForgotPasswordHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:ConfirmForgotPassword
+          Resource: '*'
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID:
+            Ref: UserPoolClient
+      Events:
+        ConfirmForgotPasswordApi:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /confirm-forgot-password
+            Method: POST
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: ConfirmForgotPasswordFunction
+  SignOutFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SignOutFunction
+      CodeUri: SignOutFunction
+      Handler: com.amalitechtaskmanager.handlers.auth.SignOutHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:GlobalSignOut
+          Resource:
+            Fn::GetAtt:
+            - UserPool
+            - Arn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID:
+            Ref: UserPoolClient
+      Events:
+        SignOutApi:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /signout
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+    Metadata:
+      SamResourceId: SignOutFunction
+  RefreshTokenFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: RefreshTokenFunction
+      CodeUri: RefreshTokenFunction
+      Handler: com.amalitechtaskmanager.handlers.auth.TokenRefreshHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:InitiateAuth
+          Resource:
+            Fn::GetAtt:
+            - UserPool
+            - Arn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID:
+            Ref: UserPoolClient
+      Events:
+        RefreshTokenApi:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /refresh-token
+            Method: POST
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: RefreshTokenFunction
+  ChangePasswordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ChangePasswordFunction
+      CodeUri: ChangePasswordFunction
+      Handler: com.amalitechtaskmanager.handlers.auth.ChangePasswordHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:ChangePassword
+          Resource: '*'
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID:
+            Ref: UserPoolClient
+      Events:
+        ChangePasswordApi:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /change-password
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+    Metadata:
+      SamResourceId: ChangePasswordFunction
+  VerifyEmailFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: VerifyEmailFunction
+      CodeUri: VerifyEmailFunction
+      Handler: com.amalitechtaskmanager.handlers.auth.VerifyEmailHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:ConfirmSignUp
+          Resource: '*'
+        - Effect: Allow
+          Action:
+          - states:StartExecution
+          Resource:
+            Ref: TeamMemberSubscriptionStepFunctionArn
+      Environment:
+        Variables:
+          USER_POOL_ID:
+            Ref: UserPool
+          USER_POOL_CLIENT_ID:
+            Ref: UserPoolClient
+          TEAM_MEMBER_SUBSCRIPTION_STEP_FUNCTION_ARN:
+            Ref: TeamMemberSubscriptionStepFunctionArn
+      Events:
+        VerifyEmailApi:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /verify-email
+            Method: POST
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: VerifyEmailFunction
+  ResendVerificationCodeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ResendVerificationCodeFunction
+      CodeUri: ResendVerificationCodeFunction
+      Handler: com.amalitechtaskmanager.handlers.auth.ResendVerificationCodeHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:ResendConfirmationCode
+          Resource: '*'
+      Environment:
+        Variables:
+          USER_POOL_ID:
+            Ref: UserPool
+          USER_POOL_CLIENT_ID:
+            Ref: UserPoolClient
+      Events:
+        ResendVerificationCodeApi:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /resend-verification-code
+            Method: POST
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: ResendVerificationCodeFunction
 Outputs:
   ApiUrl:
     Description: API Gateway endpoint URL
@@ -225,4 +472,16 @@ Outputs:
     Value:
       Fn::GetAtt:
       - UserPool
+      - Arn
+  ResendVerificationCodeFunctionArn:
+    Description: ARN of the Resend Verification Code Function
+    Value:
+      Fn::GetAtt:
+      - ResendVerificationCodeFunction
+      - Arn
+  VerifyEmailFunctionArn:
+    Description: ARN of the Verify Email Function
+    Value:
+      Fn::GetAtt:
+      - VerifyEmailFunction
       - Arn

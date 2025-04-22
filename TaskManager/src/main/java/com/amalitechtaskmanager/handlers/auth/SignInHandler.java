@@ -14,11 +14,13 @@ import java.util.Map;
 public class SignInHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     private final CognitoIdentityProviderClient cognitoClient;
     private final String clientId;
+    private final String userPoolId;
     private final ObjectMapper objectMapper;
 
     public SignInHandler() {
         this.cognitoClient = CognitoIdentityProviderClient.create();
         this.clientId = System.getenv("USER_POOL_CLIENT_ID");
+        this.userPoolId = System.getenv("USER_POOL_ID");
         this.objectMapper = new ObjectMapper();
     }
 
@@ -37,6 +39,16 @@ public class SignInHandler implements RequestHandler<APIGatewayProxyRequestEvent
             if (email == null || password == null) {
                 response.setStatusCode(400);
                 response.setBody("{\"message\": \"Email and password are required\"}");
+                return response;
+            }
+
+            // Check if email is verified
+            if (!isEmailVerified(email, context)) {
+                response.setStatusCode(403);
+                Map<String, String> errorResponse = new HashMap<>();
+                errorResponse.put("message", "Email not verified. Please verify your email before signing in.");
+                errorResponse.put("errorType", "EMAIL_NOT_VERIFIED");
+                response.setBody(objectMapper.writeValueAsString(errorResponse));
                 return response;
             }
 
@@ -79,7 +91,7 @@ public class SignInHandler implements RequestHandler<APIGatewayProxyRequestEvent
                             .build();
 
                     RespondToAuthChallengeResponse challengeResponse = cognitoClient.respondToAuthChallenge(challengeRequest);
-                    
+
                     // Return the tokens after successful password change
                     Map<String, String> tokens = new HashMap<>();
                     tokens.put("idToken", challengeResponse.authenticationResult().idToken());
@@ -112,5 +124,40 @@ public class SignInHandler implements RequestHandler<APIGatewayProxyRequestEvent
         }
 
         return response;
+    }
+
+    /**
+     * Check if the user's email is verified in Cognito
+     * @param email The user's email
+     * @param context Lambda context for logging
+     * @return true if email is verified, false otherwise
+     */
+    private boolean isEmailVerified(String email, Context context) {
+        try {
+            // Look up the user by email
+            AdminGetUserRequest getUserRequest = AdminGetUserRequest.builder()
+                    .userPoolId(userPoolId)
+                    .username(email)
+                    .build();
+
+            AdminGetUserResponse userResponse = cognitoClient.adminGetUser(getUserRequest);
+
+            // Check if the email_verified attribute is true
+            boolean verified = userResponse.userAttributes().stream()
+                    .filter(attr -> attr.name().equals("email_verified"))
+                    .findFirst()
+                    .map(attr -> attr.value().equalsIgnoreCase("true"))
+                    .orElse(false);
+
+            context.getLogger().log("Email verification status for " + email + ": " + verified);
+            return verified;
+
+        } catch (UserNotFoundException e) {
+            context.getLogger().log("User not found: " + email);
+            return false;
+        } catch (Exception e) {
+            context.getLogger().log("Error checking email verification status: " + e.getMessage());
+            return false;
+        }
     }
 }
