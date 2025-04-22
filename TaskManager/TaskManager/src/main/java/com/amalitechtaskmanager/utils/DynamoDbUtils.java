@@ -31,6 +31,7 @@ public class DynamoDbUtils {
         getSafeString(image, "taskId").ifPresent(task::setTaskId);
         getSafeString(image, "name").ifPresent(task::setName);
         getSafeString(image, "description").ifPresent(task::setDescription);
+        getSafeString(image, "responsibility").ifPresent(task::setResponsibility);
         getSafeString(image, "user_comment").ifPresent(task::setUserComment);
         getSafeString(image, "userId").ifPresent(task::setUserId);
 
@@ -51,12 +52,6 @@ public class DynamoDbUtils {
         getSafeString(image, "completed_at").ifPresent(completedAtStr -> {
             try {
                 task.setCompletedAt(LocalDateTime.parse(completedAtStr, DateTimeFormatter.ISO_DATE_TIME));
-            } catch (Exception ignored) {}
-        });
-        
-        getSafeString(image, "expired_at").ifPresent(expiredAtStr -> {
-            try {
-                task.setExpiredAt(LocalDateTime.parse(expiredAtStr, DateTimeFormatter.ISO_DATE_TIME));
             } catch (Exception ignored) {}
         });
 
