@@ -93,7 +93,8 @@ Resources:
             Enabled: true
             FilterCriteria:
               Filters:
-                - Pattern: '{"dynamodb": {NewImage: {"status": {"S": ["CREATED", "MODIFIED"]}}}}'
+                - Pattern: '{"dynamodb": {"NewImage": {"status": {"S": ["CREATED", "MODIFIED"]}}}}'
+
 
   ReminderProcessorLambda:
     Type: AWS::Serverless::Function
@@ -169,9 +170,16 @@ Outputs:
   CreateDeadlineEventLambdaArn:
     Description: ARN of the Create Deadline Event Lambda
     Value: !GetAtt CreateDeadlineEventLambda.Arn
+
   ReminderProcessorLambdaArn:
     Description: ARN of the Reminder Processor Lambda
     Value: !GetAtt ReminderProcessorLambda.Arn
+
   UpdateTaskScheduleLambdaArn:
     Description: ARN of the Update Task Schedule Lambda
     Value: !GetAtt UpdateTaskScheduleLambda.Arn
+
+  EmailNotificationTopicArn:
+    Description: ARN of the SNS Topic for general notifications
+    Value: !Ref NotificationTopicArn
+

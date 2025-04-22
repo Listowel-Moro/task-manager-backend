@@ -43,6 +43,8 @@ Resources:
         - Key: Component
           Value: SNS-SQS
 
+
+
   TaskCreationDLQ:
     Type: AWS::SQS::Queue
     Properties:
@@ -73,19 +75,40 @@ Resources:
         - Key: Component
           Value: SNS-SQS
 
+
+  TaskExpirationNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: task-expiration-notifications
+
+
 Outputs:
   TaskAssignmentNotificationTopicArn:
     Description: SNS Task Assignment Notification Topic ARN
     Value: !Ref TaskAssignmentNotificationTopic
+
   TaskDeadlineNotificationTopicArn:
     Description: SNS Task Deadline Notification Topic ARN
     Value: !Ref TaskDeadlineNotificationTopic
+
   ClosedTasksNotificationTopicArn:
     Description: SNS Closed Tasks Notification Topic ARN
     Value: !Ref ClosedTasksNotificationTopic
+
   TaskCompleteNotificationTopicArn:
     Description: SNS Task Complete Notification Topic ARN
     Value: !Ref TaskCompleteNotificationTopic
+
   TaskAssignmentQueueArn:
     Description: SQS Task Assignment Queue ARN
     Value: !GetAtt TaskAssignmentQueue.Arn
+
+  TaskExpirationNotificationTopicArn:
+    Description: SNS Task Expiration Notification Topic ARN
+    Value: !Ref TaskExpirationNotificationTopic
+
+  EmailNotificationTopicArn:
+    Description: SNS Email Notification Topic ARN
+    Value: !Ref EmailNotificationTopic
+
+

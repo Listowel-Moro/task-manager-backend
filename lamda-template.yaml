@@ -18,6 +18,15 @@ Parameters:
   TaskAssignmentNotificationTopicArn:
     Type: String
     Description: SNS Task Assignment Notification Topic ARN
+  Environment:
+    Type: String
+    Description: Deployment environment (dev, staging, prod)
+  TaskExpirationNotificationTopic:
+    Type: String
+    Description: ARN of the Task Expiration Notification SNS Topic
+  TaskDeadlineNotificationTopic:
+    Type: String
+    Description: ARN of the Task Deadline Notification SNS Topic
 
 Globals:
   Function:
@@ -65,14 +74,41 @@ Resources:
               - Effect: Allow
                 Action:
                   - sqs:SendMessage
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
                 Resource: !Ref TaskAssignmentQueueArn
               - Effect: Allow
                 Action:
                   - sns:Publish
-                Resource: !Ref TaskAssignmentNotificationTopicArn
+                Resource:
+                  - !Ref TaskAssignmentNotificationTopicArn
+                  - !Ref TaskExpirationNotificationTopic
+                  - !Ref TaskDeadlineNotificationTopic
+
       Tags:
         - Key: Component
           Value: Lambda
+
+  EventBridgeSchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SchedulerPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ReminderProcessorLambda-${Environment}"
 
   CreateTaskFunction:
     Type: AWS::Serverless::Function
@@ -113,9 +149,10 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: com.amalitechtaskmanager.handlers.task.GetAdminTasksHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
-          TASK_TABLE_NAME: !Ref TasksTableName
+          TASKS_TABLE: !Ref TasksTableName
       Events:
         GetAdminTasksApi:
           Type: Api
@@ -123,8 +160,7 @@ Resources:
             Path: /tasks
             Method: GET
       Tags:
-        - Key: Component
-          Value: Lambda
+        Component: Lambda
 
   GetAdminTaskFunction:
     Type: AWS::Serverless::Function
@@ -133,7 +169,7 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
-          TASK_TABLE_NAME: !Ref TasksTableName
+          TASKS_TABLE: !Ref TasksTableName
       Events:
         GetAdminTask:
           Type: Api
@@ -143,83 +179,41 @@ Resources:
       Tags:
         Component: Lambda
 
-  # Notification Lambda's
-  CreateDeadlineEventLambda:
+
+  GetAdminAnalyticsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub CreateDeadlineEventLambda-${Environment}
-      Handler: com.amalitechtaskmanager.handlers.notification.CreateDeadlineEvent::handleRequest
-      CodeUri: TaskManager/
-      Description: Lambda function to create deadline events from DynamoDB Streams
+      Handler: com.amalitechtaskmanager.handlers.task.GetAdminAnalyticsHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
-          SCHEDULER_ROLE_ARN: !GetAtt EventBridgeSchedulerRole.Arn
-          TARGET_LAMBDA_ARN: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ReminderProcessorLambda-${Environment}
-          TABLE_NAME: !Ref TasksTable
-          ACCOUNT_ID: !Ref AccountId
-          REGION: !Ref Region
-
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref TasksTable
-        - Statement:
-            - Effect: Allow
-              Action:
-                - dynamodb:DescribeStream
-                - dynamodb:GetRecords
-                - dynamodb:GetShardIterator
-                - dynamodb:ListStreams
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: !GetAtt TasksTable.StreamArn
-        - Statement:
-            - Effect: Allow
-              Action:
-                - scheduler:CreateSchedule
-              Resource: !Sub arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*
-            - Effect: Allow
-              Action: iam:PassRole
-              Resource: !GetAtt EventBridgeSchedulerRole.Arn
+          TASKS_TABLE: !Ref TasksTableName
       Events:
-        DynamoStream:
-          Type: DynamoDB
+        GetAdminAnalyticsApi:
+          Type: Api
           Properties:
-            Stream: !GetAtt TasksTable.StreamArn
-            StartingPosition: LATEST
-            BatchSize: 10
-            Enabled: true
-            # Filter events to only those with status "CREATED"
-            FilterCriteria:
-              Filters:
-                - Pattern: '{"dynamodb": {NewImage: {"status": {"S": ["CREATED", "MODIFIED"]}}}}'
+            Path: /tasks/analytics
+            Method: GET
+      Tags:
+        Component: Lambda
 
-
-
-  TaskExpirationFunction:
+  TaskExpirationHandlerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: TaskExpirationHandler
+      FunctionName: !Sub TaskExpirationHandler-${Environment}
       Handler: com.amalitechtaskmanager.handlers.task.TaskExpirationHandler::handleRequest
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
           TASKS_TABLE: !Ref TasksTableName
-          USERS_TABLE: !Ref UsersTableName
-          TASK_EXPIRATION_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationNotificationTopicArn
-          TASK_DEADLINE_NOTIFICATION_TOPIC_ARN: !Ref TaskDeadlineNotificationTopicArn
+          TASK_EXPIRATION_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationNotificationTopic
+          TASK_DEADLINE_NOTIFICATION_TOPIC_ARN: !Ref TaskDeadlineNotificationTopic
       Events:
-        ScheduledEvent:
+        TaskExpirationSchedule:
           Type: Schedule
           Properties:
-            Schedule: 'rate(1 day)'
-            Name: TaskExpirationCheck
-            Description: 'Daily check for expired tasks'
+            Schedule: rate(1 day)
             Enabled: true
-      Tags:
-        - Key: Component
-          Value: Lambda
-
 
 Outputs:
   ApiUrl:

@@ -44,9 +44,10 @@ Resources:
         TasksTableName: !GetAtt DynamoDBStack.Outputs.TasksTableName
         TaskAssignmentQueueArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentQueueArn
         TaskAssignmentNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentNotificationTopicArn
-      Tags:
-        - Key: Component
-          Value: LambdaFunctions
+        TaskDeadlineNotificationTopic: !GetAtt SnsSqsStack.Outputs.TaskDeadlineNotificationTopicArn
+        TaskExpirationNotificationTopic: !GetAtt SnsSqsStack.Outputs.TaskExpirationNotificationTopicArn
+        Environment: Production
+
 
   DynamoDBStack:
     Type: AWS::CloudFormation::Stack

@@ -31,7 +31,6 @@ public class DynamoDbUtils {
         getSafeString(image, "taskId").ifPresent(task::setTaskId);
         getSafeString(image, "name").ifPresent(task::setName);
         getSafeString(image, "description").ifPresent(task::setDescription);
-        getSafeString(image, "responsibility").ifPresent(task::setResponsibility);
         getSafeString(image, "user_comment").ifPresent(task::setUserComment);
         getSafeString(image, "userId").ifPresent(task::setUserId);
 
