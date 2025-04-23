@@ -27,6 +27,26 @@ public class SignInHandler implements RequestHandler<APIGatewayProxyRequestEvent
     private final ObjectMapper objectMapper;
     private static final Logger logger = Logger.getLogger(SignInHandler.class.getName());
 
+//    public SignInHandler() {
+//        // Get the region from environment variable
+//        String regionName = System.getenv("AWS_REGION");
+//        Region region = regionName != null ? Region.of(regionName) : Region.EU_CENTRAL_1;
+//
+//        // Initialize clients with explicit region
+//        this.cognitoClient = CognitoIdentityProviderClient.builder()
+//                .region(region)
+//                .build();
+//
+//        this.sfnClient = SfnClient.builder()
+//                .region(region)
+//                .build();
+//
+//        this.clientId = System.getenv("USER_POOL_CLIENT_ID");
+//        this.userPoolId = System.getenv("USER_POOL_ID");
+//        this.teamMemberSubscriptionStepFunctionArn = System.getenv("TEAM_MEMBER_SUBSCRIPTION_STEP_FUNCTION_ARN");
+//        this.objectMapper = new ObjectMapper();
+//    }
+
     public SignInHandler() {
         // Get the region from environment variable
         String regionName = System.getenv("AWS_REGION");
@@ -42,7 +62,14 @@ public class SignInHandler implements RequestHandler<APIGatewayProxyRequestEvent
                 .build();
 
         this.clientId = System.getenv("USER_POOL_CLIENT_ID");
-        this.userPoolId = System.getenv("USER_POOL_ID");
+        // Parse User Pool ID from ARN if needed
+        String rawUserPoolId = System.getenv("USER_POOL_ID");
+        if (rawUserPoolId != null && rawUserPoolId.contains("userpool/")) {
+            // Extract the actual pool ID from the ARN format
+            this.userPoolId = rawUserPoolId.substring(rawUserPoolId.lastIndexOf("/") + 1);
+        } else {
+            this.userPoolId = rawUserPoolId;
+        }
         this.teamMemberSubscriptionStepFunctionArn = System.getenv("TEAM_MEMBER_SUBSCRIPTION_STEP_FUNCTION_ARN");
         this.objectMapper = new ObjectMapper();
     }
@@ -213,19 +240,12 @@ public class SignInHandler implements RequestHandler<APIGatewayProxyRequestEvent
 
             AdminListGroupsForUserResponse groupsResponse = cognitoClient.adminListGroupsForUser(listGroupsRequest);
 
-            // Log all groups the user belongs to for troubleshooting
-            logger.info("User " + email + " belongs to groups: " +
-                    groupsResponse.groups().stream()
-                            .map(group -> group.groupName())
-                            .collect(java.util.stream.Collectors.joining(", ")));
-
-            // Check if any group is named "Admins" - note the exact spelling!
+            // Check if any group is named "Admins"
             return groupsResponse.groups().stream()
                     .anyMatch(group -> "Admins".equals(group.groupName()));
 
         } catch (Exception e) {
             logger.warning("Error checking user groups: " + e.getMessage());
-            e.printStackTrace(); // Add stack trace for better debugging
             return false;
         }
     }

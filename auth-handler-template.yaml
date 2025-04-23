@@ -67,6 +67,95 @@ Resources:
             Method: POST
             Auth:
               Authorizer: NONE
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - cognito-idp:SignUp
+                  - cognito-idp:AdminConfirmSignUp
+                  - cognito-idp:AdminAddUserToGroup
+                  - cognito-idp:AdminUpdateUserAttributes
+                  - cognito-idp:InitiateAuth
+                  - cognito-idp:AdminGetUser
+                  - cognito-idp:AdminListGroupsForUser
+                  - cognito-idp:RespondToAuthChallenge
+                  - cognito-idp:ForgotPassword
+                  - cognito-idp:ConfirmForgotPassword
+                  - cognito-idp:GlobalSignOut
+                  - cognito-idp:ChangePassword
+                  - cognito-idp:ConfirmSignUp
+                  - cognito-idp:AdminCreateUser
+                  - cognito-idp:AdminSetUserPassword
+                  - cognito-idp:AdminInitiateAuth
+                  - cognito-idp:ResendConfirmationCode
+                Resource: !Ref UserPoolArn
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource: !Ref TeamMemberSubscriptionStepFunctionArn
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref TaskAssignmentNotificationTopicArn
+
+
+#  SignInFunction:
+#    Type: AWS::Serverless::Function
+#    Properties:
+#      FunctionName: SignInFunction
+#      CodeUri: TaskManager
+#      Handler: com.amalitechtaskmanager.handlers.auth.SignInHandler::handleRequest
+#      Runtime: java21
+#      MemorySize: 512
+#      Timeout: 30
+#      Policies:
+#        - Version: '2012-10-17'
+#          Statement:
+#            - Effect: Allow
+#              Action:
+#                - cognito-idp:InitiateAuth
+#                - cognito-idp:AdminGetUser
+#                - cognito-idp:AdminListGroupsForUser
+#                - cognito-idp:RespondToAuthChallenge
+#                - cognito-idp:AdminUpdateUserAttributes
+#              Resource: !Sub 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolArn}'
+#            - Effect: Allow
+#              Action:
+#                - states:StartExecution
+#              Resource: !Ref TeamMemberSubscriptionStepFunctionArn
+#      Environment:
+#        Variables:
+#          USER_POOL_CLIENT_ID: !Ref UserPoolClientIdArn
+#          USER_POOL_ID: !Sub '${UserPoolArn}' # Extract the user pool ID from ARN
+#          TEAM_MEMBER_SUBSCRIPTION_STEP_FUNCTION_ARN: !Ref TeamMemberSubscriptionStepFunctionArn
+#      Events:
+#        SignInApi:
+#          Type: Api
+#          Properties:
+#            RestApiId: !Ref ApiGateway
+#            Path: /signin
+#            Method: POST
+#            Auth:
+#              Authorizer: NONE
 
   SignInFunction:
     Type: AWS::Serverless::Function
@@ -77,23 +166,7 @@ Resources:
       Runtime: java21
       MemorySize: 512
       Timeout: 30
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:InitiateAuth
-                - cognito-idp:AdminGetUser
-                - cognito-idp:AdminListGroupsForUser
-                - cognito-idp:RespondToAuthChallenge
-                - cognito-idp:AdminUpdateUserAttributes
-                - cognito-idp:AdminInitiateAuth
-                - cognito-idp:AdminRespondToAuthChallenge
-              Resource: !Ref UserPoolArn
-            - Effect: Allow
-              Action:
-                - states:StartExecution
-              Resource: !Ref TeamMemberSubscriptionStepFunctionArn
+      Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
           USER_POOL_CLIENT_ID: !Ref UserPoolClientIdArn
@@ -108,6 +181,7 @@ Resources:
             Method: POST
             Auth:
               Authorizer: NONE
+
 
   AdminCreateMemberFunction:
     Type: AWS::Serverless::Function
