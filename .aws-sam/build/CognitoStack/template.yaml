@@ -433,12 +433,12 @@ Resources:
               Authorizer: NONE
     Metadata:
       SamResourceId: VerifyEmailFunction
-  ResendVerificationCodeFunction:
+  ResendTempPasswordFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ResendVerificationCodeFunction
-      CodeUri: ResendVerificationCodeFunction
-      Handler: com.amalitechtaskmanager.handlers.auth.ResendVerificationCodeHandler::handleRequest
+      FunctionName: ResendTempPasswordFunction
+      CodeUri: ResendTempPasswordFunction
+      Handler: com.amalitechtaskmanager.handlers.auth.ResendTempPasswordHandler::handleRequest
       Runtime: java21
       MemorySize: 512
       Timeout: 30
@@ -447,7 +447,10 @@ Resources:
         Statement:
         - Effect: Allow
           Action:
-          - cognito-idp:ResendConfirmationCode
+          - cognito-idp:AdminGetUser
+          - cognito-idp:AdminSetUserPassword
+          - cognito-idp:GetUser
+          - cognito-idp:AdminListGroupsForUser
           Resource: '*'
       Environment:
         Variables:
@@ -456,17 +459,17 @@ Resources:
           USER_POOL_CLIENT_ID:
             Ref: UserPoolClient
       Events:
-        ResendVerificationCodeApi:
+        ResendTempPasswordApi:
           Type: Api
           Properties:
             RestApiId:
               Ref: ApiGateway
-            Path: /resend-verification-code
+            Path: /admin/resend-temp-password
             Method: POST
             Auth:
-              Authorizer: NONE
+              Authorizer: CognitoAuthorizer
     Metadata:
-      SamResourceId: ResendVerificationCodeFunction
+      SamResourceId: ResendTempPasswordFunction
 Outputs:
   ApiUrl:
     Description: API Gateway endpoint URL
