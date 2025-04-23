@@ -10,7 +10,9 @@ import software.amazon.awssdk.services.scheduler.model.ResourceNotFoundException
 import software.amazon.awssdk.services.scheduler.model.ScheduleState;
 import software.amazon.awssdk.services.scheduler.model.Target;
 
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
@@ -31,11 +33,13 @@ public class SchedulerUtils {
         return Optional.ofNullable(attr).map(AttributeValue::getS);
     }
 
-    public static Optional<OffsetDateTime> parseDeadline(String deadline, String taskId) {
+    public static Optional<OffsetDateTime> parseDeadline(String deadline) {
+        logger.info("Deadline string: {}", deadline);
         try {
-            return Optional.of(OffsetDateTime.parse(deadline, DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+            LocalDateTime localDateTime = LocalDateTime.parse(deadline, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            return Optional.of(localDateTime.atOffset(ZoneOffset.UTC)); // or any desired ZoneOffset
         } catch (DateTimeParseException e) {
-            logger.error("Invalid deadline format for taskId: {}: {}", taskId, deadline);
+            logger.error("Invalid deadline format: {}", deadline);
             return Optional.empty();
         }
     }
@@ -57,6 +61,7 @@ public class SchedulerUtils {
     public void createSchedule(String taskId, OffsetDateTime reminderTime,
                                Map<String, AttributeValue> taskItem,
                                String targetLambdaArn, String schedulerRoleArn) {
+        logger.info("Creating schedule for taskId: {} at {}", taskId, reminderTime);
         try {
             String scheduleExpression = "at(" + reminderTime.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + ")";
             Map<String, String> inputPayload = new HashMap<>();

@@ -2,6 +2,7 @@ package com.amalitechtaskmanager.handlers.notification;
 
 import com.amalitechtaskmanager.model.Task;
 import com.amalitechtaskmanager.utils.DynamoDbUtils;
+import com.amalitechtaskmanager.utils.NotificationResponse;
 import com.amalitechtaskmanager.utils.SchedulerUtils;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
@@ -10,6 +11,7 @@ import com.amazonaws.services.lambda.runtime.events.DynamodbEvent.DynamodbStream
 import com.amazonaws.services.lambda.runtime.events.models.dynamodb.AttributeValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.services.scheduler.SchedulerClient;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -17,30 +19,34 @@ import java.time.ZoneOffset;
 
 import java.util.*;
 
-public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Optional<Void>> {
+public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, NotificationResponse> {
 
     private static final Logger logger = LoggerFactory.getLogger(CreateDeadlineEvent.class);
 
     private static final String TARGET_LAMBDA_ARN = System.getenv("TARGET_LAMBDA_ARN");
     private static final String SCHEDULER_ROLE_ARN = System.getenv("SCHEDULER_ROLE_ARN");
-    private static final long REMINDER_OFFSET_MINUTES = 60;
+    private static final long REMINDER_OFFSET_MINUTES = 2;
 
     private final SchedulerUtils schedulerUtils;
 
-    public CreateDeadlineEvent(SchedulerUtils schedulerUtils) {
-        this.schedulerUtils = schedulerUtils;
 
+    public CreateDeadlineEvent() {
+        SchedulerClient schedulerClient = SchedulerClient.create();
+        this.schedulerUtils = new SchedulerUtils(schedulerClient);
     }
 
     @Override
-    public Optional<Void> handleRequest(DynamodbEvent event, Context context) {
+    public NotificationResponse handleRequest(DynamodbEvent event, Context context) {
         if (TARGET_LAMBDA_ARN == null || SCHEDULER_ROLE_ARN == null) {
             logger.error("Environment variables TARGET_LAMBDA_ARN or SCHEDULER_ROLE_ARN are not set");
-            throw new IllegalStateException("Required environment variables are not set");
+            return new NotificationResponse(false, "Environment variables TARGET_LAMBDA_ARN or SCHEDULER_ROLE_ARN are not set");
         }
+        List<String> errors = new ArrayList<>();
+        int processedRecords = 0;
+
         for (DynamodbStreamRecord record : event.getRecords()) {
             String eventName = record.getEventName();
-            if (!"INSERT".equals(eventName) && !"MODIFY".equals(eventName)) {
+            if (!"INSERT".equals(eventName)) {
                 logger.debug("Skipping event: {}", eventName);
                 continue;
             }
@@ -49,18 +55,25 @@ public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Option
                 Map<String, AttributeValue> newImage = record.getDynamodb().getNewImage();
                 if (newImage == null) {
                     logger.warn("No newImage found for {} event", eventName);
+                    errors.add("No newImage found for " + eventName + " event");
                     continue;
                 }
 
                 Optional<Task> optionalTask = DynamoDbUtils.parseTask(newImage);
+                optionalTask.ifPresentOrElse(
+                        task -> logger.info("Parsed task: {}", task),
+                        () -> logger.warn("Failed to parse task object from record")
+                );
                 if (optionalTask.isEmpty()) {
                     logger.warn("Failed to parse task object from record");
+                    errors.add("Failed to parse task object from record");
                     continue;
                 }
 
                 Task task = optionalTask.get();
                 if (task.getTaskId() == null) {
                     logger.warn("taskId missing in task object");
+                    errors.add("taskId missing in task object");
                     continue;
                 }
 
@@ -69,6 +82,7 @@ public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Option
                 LocalDateTime deadline = task.getDeadline();
                 if (deadline == null) {
                     logger.warn("No deadline found for taskId: {}", task.getTaskId());
+                    errors.add("No deadline found for taskId: " + task.getTaskId());
                     continue;
                 }
 
@@ -77,13 +91,14 @@ public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Option
 
                 if (reminderTime.isBefore(now)) {
                     logger.warn("Reminder time {} is in the past for taskId: {}", reminderTime, task.getTaskId());
+                    errors.add("Reminder time " + reminderTime + " is in the past for taskId: " + task.getTaskId());
                     continue;
                 }
 
                 logger.info("Creating schedule for taskId: {} at {}", task.getTaskId(), reminderTime);
 
                 schedulerUtils.createSchedule(task.getTaskId(),reminderTime, newImage, TARGET_LAMBDA_ARN, SCHEDULER_ROLE_ARN);
-
+                processedRecords++;
                 logger.debug("Record details: {}", newImage);
 
             } catch (Exception e) {
@@ -91,6 +106,10 @@ public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Option
             }
         }
 
-        return Optional.empty();
+        if(!errors.isEmpty()) {
+            return new NotificationResponse(false, "Processed " + processedRecords + " records with " + errors.size() + " errors: " + String.join("; ", errors));
+        }
+
+        return new NotificationResponse(true, "Successfully processed " + processedRecords + " records.");
     }
 }
