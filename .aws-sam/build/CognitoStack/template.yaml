@@ -139,16 +139,26 @@ Resources:
           Action:
           - cognito-idp:InitiateAuth
           - cognito-idp:AdminGetUser
+          - cognito-idp:AdminListGroupsForUser
+          - cognito-idp:RespondToAuthChallenge
+          - cognito-idp:AdminUpdateUserAttributes
           Resource:
             Fn::GetAtt:
             - UserPool
             - Arn
+        - Effect: Allow
+          Action:
+          - states:StartExecution
+          Resource:
+            Ref: TeamMemberSubscriptionStepFunctionArn
       Environment:
         Variables:
           USER_POOL_CLIENT_ID:
             Ref: UserPoolClient
           USER_POOL_ID:
             Ref: UserPool
+          TEAM_MEMBER_SUBSCRIPTION_STEP_FUNCTION_ARN:
+            Ref: TeamMemberSubscriptionStepFunctionArn
       Events:
         SignInApi:
           Type: Api
@@ -179,8 +189,11 @@ Resources:
           - cognito-idp:AdminAddUserToGroup
           - cognito-idp:AdminUpdateUserAttributes
           - cognito-idp:AdminGetUser
-          Resource:
-            Fn::Sub: arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPool}
+          - cognito-idp:AdminGetUser
+          - cognito-idp:AdminSetUserPassword
+          - cognito-idp:AdminInitiateAuth
+          - cognito-idp:ResendConfirmationCode
+          Resource: arn:aws:cognito-idp:eu-central-1:888577065142:userpool/*
         - Effect: Allow
           Action:
           - sns:Publish

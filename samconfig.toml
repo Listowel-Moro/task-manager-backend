@@ -18,6 +18,9 @@ capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
 confirm_changeset = true
 resolve_s3 = true
 #template = "main-template.yaml"
+s3_prefix = "task-manager-backend"
+region = "eu-central-1"
+image_repositories = []
 
 
 [default.package.parameters]

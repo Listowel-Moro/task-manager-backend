@@ -572,11 +572,19 @@ Resources:
               Action:
                 - cognito-idp:InitiateAuth
                 - cognito-idp:AdminGetUser
+                - cognito-idp:AdminListGroupsForUser
+                - cognito-idp:RespondToAuthChallenge
+                - cognito-idp:AdminUpdateUserAttributes
               Resource: !GetAtt UserPool.Arn
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Ref TeamMemberSubscriptionStepFunctionArn
       Environment:
         Variables:
           USER_POOL_CLIENT_ID: !Ref UserPoolClient
           USER_POOL_ID: !Ref UserPool
+          TEAM_MEMBER_SUBSCRIPTION_STEP_FUNCTION_ARN: !Ref TeamMemberSubscriptionStepFunctionArn
       Events:
         SignInApi:
           Type: Api
@@ -605,8 +613,13 @@ Resources:
                 - cognito-idp:AdminAddUserToGroup
                 - cognito-idp:AdminUpdateUserAttributes  # Added for verification email
                 - cognito-idp:AdminGetUser
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminSetUserPassword  # Add this permission
+                - cognito-idp:AdminInitiateAuth     # Also add this for the auth flow
+                - cognito-idp:ResendConfirmationCode # And this for verification code
 #              Resource: !GetAtt UserPool.Arn
-              Resource: !Sub 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPool}'
+#              Resource: !Sub 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPool}'
+              Resource: "arn:aws:cognito-idp:eu-central-1:888577065142:userpool/*"
             - Effect: Allow
               Action:
                 - sns:Publish
@@ -811,12 +824,12 @@ Resources:
             Auth:
               Authorizer: NONE
 
-  ResendVerificationCodeFunction:
+  ResendTempPasswordFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ResendVerificationCodeFunction
+      FunctionName: ResendTempPasswordFunction
       CodeUri: TaskManager
-      Handler: com.amalitechtaskmanager.handlers.auth.ResendVerificationCodeHandler::handleRequest
+      Handler: com.amalitechtaskmanager.handlers.auth.ResendTempPasswordHandler::handleRequest
       Runtime: java21
       MemorySize: 512
       Timeout: 30
@@ -825,21 +838,24 @@ Resources:
           Statement:
             - Effect: Allow
               Action:
-                - cognito-idp:ResendConfirmationCode
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminSetUserPassword
+                - cognito-idp:GetUser
+                - cognito-idp:AdminListGroupsForUser
               Resource: "*"
       Environment:
         Variables:
           USER_POOL_ID: !Ref UserPool
           USER_POOL_CLIENT_ID: !Ref UserPoolClient
       Events:
-        ResendVerificationCodeApi:
+        ResendTempPasswordApi:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /resend-verification-code
+            Path: /admin/resend-temp-password
             Method: POST
             Auth:
-              Authorizer: NONE
+              Authorizer: CognitoAuthorizer
 
 Outputs:
   ApiUrl:
