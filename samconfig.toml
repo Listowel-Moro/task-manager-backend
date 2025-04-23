@@ -17,7 +17,7 @@ confirm_changeset = true
 resolve_s3 = true
 s3_prefix = "task-manager-backend"
 region = "eu-central-1"
-profile = "dev-profile"
+#profile = "dev-profile"
 parameter_overrides = "Environment=\"Production\""  # Added environment parameter
 image_repositories = []
 

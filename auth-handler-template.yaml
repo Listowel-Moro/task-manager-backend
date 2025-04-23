@@ -1,0 +1,389 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Authentication handlers
+
+Parameters:
+  TeamMemberSubscriptionStepFunctionArn:
+    Type: String
+    Description: ARN of the Step Function for team member
+  TaskAssignmentNotificationTopicArn:
+    Type: String
+    Description: ARN of the SNS Topic for task assignment notifications
+  UserPoolArn:
+    Type: String
+    Description: The User Pool ARN for the Cognito User
+  UserPoolClientIdArn:
+    Type: String
+    Description: The User Pool Client ID for the Cognito User Pool
+
+Resources:
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !Ref UserPoolArn
+            Identity:
+              Header: Authorization
+
+  # Lambda Functions
+  SignUpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SignUpFunction
+      CodeUri: TaskManager
+      Handler: com.amalitechtaskmanager.handlers.auth.SignUpHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:SignUp
+                - cognito-idp:AdminConfirmSignUp
+                - cognito-idp:AdminAddUserToGroup
+                - cognito-idp:AdminUpdateUserAttributes
+#              Resource: !Ref UserPoolArn
+              Resource: "*"
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientIdArn
+          USER_POOL_ID: !Ref UserPoolArn
+      Events:
+        SignUpApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /signup
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  SignInFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SignInFunction
+      CodeUri: TaskManager
+      Handler: com.amalitechtaskmanager.handlers.auth.SignInHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:InitiateAuth
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminListGroupsForUser
+                - cognito-idp:RespondToAuthChallenge
+                - cognito-idp:AdminUpdateUserAttributes
+                - cognito-idp:AdminInitiateAuth
+                - cognito-idp:AdminRespondToAuthChallenge
+              Resource: !Ref UserPoolArn
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Ref TeamMemberSubscriptionStepFunctionArn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientIdArn
+          USER_POOL_ID: !Ref UserPoolArn
+          TEAM_MEMBER_SUBSCRIPTION_STEP_FUNCTION_ARN: !Ref TeamMemberSubscriptionStepFunctionArn
+      Events:
+        SignInApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /signin
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  AdminCreateMemberFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: AdminCreateMemberFunction
+      CodeUri: TaskManager
+      Handler: com.amalitechtaskmanager.handlers.auth.AdminCreateMemberHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminAddUserToGroup
+                - cognito-idp:AdminUpdateUserAttributes
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminSetUserPassword
+                - cognito-idp:AdminInitiateAuth
+                - cognito-idp:ResendConfirmationCode
+              Resource: !Ref UserPoolArn
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref TaskAssignmentNotificationTopicArn
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Ref TeamMemberSubscriptionStepFunctionArn
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPoolArn
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientIdArn
+          TASK_ASSIGNMENT_TOPIC_ARN: !Ref TaskAssignmentNotificationTopicArn
+          TEAM_MEMBER_SUBSCRIPTION_STEP_FUNCTION_ARN: !Ref TeamMemberSubscriptionStepFunctionArn
+      Events:
+        AdminCreateMemberApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /admin/create-member
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  ForgotPasswordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ForgotPasswordFunction
+      CodeUri: TaskManager
+      Handler: com.amalitechtaskmanager.handlers.auth.ForgotPasswordHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ForgotPassword
+              Resource: !Ref UserPoolArn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientIdArn
+      Events:
+        ForgotPasswordApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /forgot-password
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  ConfirmForgotPasswordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ConfirmForgotPasswordFunction
+      CodeUri: TaskManager
+      Handler: com.amalitechtaskmanager.handlers.auth.ConfirmForgotPasswordHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ConfirmForgotPassword
+              Resource: !Ref UserPoolArn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientIdArn
+      Events:
+        ConfirmForgotPasswordApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /confirm-forgot-password
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  SignOutFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SignOutFunction
+      CodeUri: TaskManager
+      Handler: com.amalitechtaskmanager.handlers.auth.SignOutHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:GlobalSignOut
+              Resource: !Ref UserPoolArn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientIdArn
+      Events:
+        SignOutApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /signout
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  RefreshTokenFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: RefreshTokenFunction
+      CodeUri: TaskManager
+      Handler: com.amalitechtaskmanager.handlers.auth.TokenRefreshHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:InitiateAuth
+              Resource: !Ref UserPoolArn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientIdArn
+      Events:
+        RefreshTokenApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /refresh-token
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  ChangePasswordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ChangePasswordFunction
+      CodeUri: TaskManager
+      Handler: com.amalitechtaskmanager.handlers.auth.ChangePasswordHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ChangePassword
+              Resource: !Ref UserPoolArn
+      Environment:
+        Variables:
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientIdArn
+      Events:
+        ChangePasswordApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /change-password
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  VerifyEmailFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: VerifyEmailFunction
+      CodeUri: TaskManager
+      Handler: com.amalitechtaskmanager.handlers.auth.VerifyEmailHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ConfirmSignUp
+              Resource: !Ref UserPoolArn
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Ref TeamMemberSubscriptionStepFunctionArn
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPoolArn
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientIdArn
+          TEAM_MEMBER_SUBSCRIPTION_STEP_FUNCTION_ARN: !Ref TeamMemberSubscriptionStepFunctionArn
+      Events:
+        VerifyEmailApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /verify-email
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  ResendTempPasswordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ResendTempPasswordFunction
+      CodeUri: TaskManager
+      Handler: com.amalitechtaskmanager.handlers.auth.ResendTempPasswordHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminSetUserPassword
+                - cognito-idp:GetUser
+                - cognito-idp:AdminListGroupsForUser
+              Resource: !Ref UserPoolArn
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPoolArn
+          USER_POOL_CLIENT_ID: !Ref UserPoolClientIdArn
+      Events:
+        ResendTempPasswordApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /admin/resend-temp-password
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref UserPoolClientIdArn
+  UserPoolArn:
+    Description: Cognito User Pool ARN
+    Value: !Ref UserPoolArn
+  ResendVerificationCodeFunctionArn:
+    Description: ARN of the Resend Verification Code Function
+    Value: !GetAtt ResendTempPasswordFunction.Arn
+  VerifyEmailFunctionArn:
+    Description: ARN of the Verify Email Function
+    Value: !GetAtt VerifyEmailFunction.Arn
+  ApiGatewayId:
+    Description: API Gateway ID
+    Value: !Ref ApiGateway
