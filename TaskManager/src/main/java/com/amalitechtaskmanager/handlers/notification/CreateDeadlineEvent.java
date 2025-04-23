@@ -11,15 +11,10 @@ import com.amazonaws.services.lambda.runtime.events.models.dynamodb.AttributeVal
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.scheduler.SchedulerClient;
-import software.amazon.awssdk.services.scheduler.model.CreateScheduleRequest;
-import software.amazon.awssdk.services.scheduler.model.FlexibleTimeWindow;
-import software.amazon.awssdk.services.scheduler.model.ScheduleState;
-import software.amazon.awssdk.services.scheduler.model.Target;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Optional<Void>> {

@@ -9,7 +9,7 @@
     <plugins>
       <plugin>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>3.2.4</version>
+        <version>3.4.1</version>
         <executions>
           <execution>
             <phase>package</phase>
@@ -18,7 +18,6 @@
             </goals>
           </execution>
         </executions>
-        <configuration />
       </plugin>
     </plugins>
   </build>
@@ -39,5 +38,6 @@
   <properties>
     <maven.compiler.target>21</maven.compiler.target>
     <maven.compiler.source>21</maven.compiler.source>
+    <aws.sdk.version>2.20.86</aws.sdk.version>
   </properties>
 </project>
