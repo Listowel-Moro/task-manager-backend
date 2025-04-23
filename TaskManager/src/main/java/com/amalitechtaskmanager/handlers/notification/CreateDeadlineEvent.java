@@ -10,16 +10,11 @@ import com.amazonaws.services.lambda.runtime.events.DynamodbEvent.DynamodbStream
 import com.amazonaws.services.lambda.runtime.events.models.dynamodb.AttributeValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import software.amazon.awssdk.services.scheduler.SchedulerClient;
-import software.amazon.awssdk.services.scheduler.model.CreateScheduleRequest;
-import software.amazon.awssdk.services.scheduler.model.FlexibleTimeWindow;
-import software.amazon.awssdk.services.scheduler.model.ScheduleState;
-import software.amazon.awssdk.services.scheduler.model.Target;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
+
 import java.util.*;
 
 public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Optional<Void>> {
@@ -30,12 +25,11 @@ public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Option
     private static final String SCHEDULER_ROLE_ARN = System.getenv("SCHEDULER_ROLE_ARN");
     private static final long REMINDER_OFFSET_MINUTES = 60;
 
-    private final SchedulerClient schedulerClient;
     private final SchedulerUtils schedulerUtils;
 
     public CreateDeadlineEvent(SchedulerUtils schedulerUtils) {
         this.schedulerUtils = schedulerUtils;
-        this.schedulerClient = SchedulerClient.create();
+
     }
 
     @Override
