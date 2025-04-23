@@ -73,6 +73,7 @@ public class SchedulerUtils {
                     .name("TaskReminder_" + taskId)
                     .scheduleExpression(scheduleExpression)
                     .state(ScheduleState.ENABLED)
+                    .description("Reminder for task " + taskId)
                     .flexibleTimeWindow(FlexibleTimeWindow.builder().mode("OFF").build())
                     .target(Target.builder()
                             .arn(targetLambdaArn)
