@@ -2,22 +2,33 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: DynamoDB Resources for Task Management System Backend
 
 Resources:
-  TasksTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: Tasks
-      AttributeDefinitions:
-        - AttributeName: taskId
-          AttributeType: S
-      KeySchema:
-        - AttributeName: taskId
-          KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
-      Tags:
-        - Key: Component
-          Value: DynamoDB
+    TasksTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: Tasks
+        AttributeDefinitions:
+          - AttributeName: taskId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: taskId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        StreamSpecification:
+          StreamViewType: NEW_IMAGE
+        Tags:
+          - Key: Component
+            Value: DynamoDB
+
 
 Outputs:
   TasksTableName:
     Description: DynamoDB Tasks Table Name
     Value: !Ref TasksTable
+
+  TasksTableArn:
+    Description: DynamoDB Tasks Table ARN
+    Value: !GetAtt TasksTable.Arn
+
+  TasksTableStreamArn:
+    Description: DynamoDB Tasks Table Stream ARN
+    Value: !GetAtt TasksTable.StreamArn
