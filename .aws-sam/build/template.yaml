@@ -1,25 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Task Management System Backend - Main Template
+Description: Task Management System - Parent Stack
 Resources:
-  CognitoStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: CognitoStack\template.yaml
-      Parameters:
-        TeamMemberSubscriptionStepFunctionArn:
-          Fn::GetAtt:
-          - StepFunctionsStack
-          - Outputs.TeamMemberSubscriptionStepFunctionArn
-        TaskAssignmentNotificationTopicArn:
-          Fn::GetAtt:
-          - SnsSqsStack
-          - Outputs.TaskAssignmentNotificationTopicArn
-      Tags:
-      - Key: Component
-        Value: Cognito
-    Metadata:
-      SamResourceId: CognitoStack
   SnsSqsStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -31,6 +13,7 @@ Resources:
       SamResourceId: SnsSqsStack
   StepFunctionsStack:
     Type: AWS::CloudFormation::Stack
+    DependsOn: SnsSqsStack
     Properties:
       TemplateURL: StepFunctionsStack\template.yaml
       Parameters:
@@ -51,6 +34,27 @@ Resources:
         Value: StepFunctions
     Metadata:
       SamResourceId: StepFunctionsStack
+  CognitoStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+    - SnsSqsStack
+    - StepFunctionsStack
+    Properties:
+      TemplateURL: CognitoStack\template.yaml
+      Parameters:
+        TeamMemberSubscriptionStepFunctionArn:
+          Fn::GetAtt:
+          - StepFunctionsStack
+          - Outputs.TeamMemberSubscriptionStepFunctionArn
+        TaskAssignmentNotificationTopicArn:
+          Fn::GetAtt:
+          - SnsSqsStack
+          - Outputs.TaskAssignmentNotificationTopicArn
+      Tags:
+      - Key: Component
+        Value: Cognito
+    Metadata:
+      SamResourceId: CognitoStack
 Outputs:
   ApiUrlCognito:
     Description: API Gateway endpoint URL
@@ -58,3 +62,15 @@ Outputs:
       Fn::GetAtt:
       - CognitoStack
       - Outputs.ApiUrl
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value:
+      Fn::GetAtt:
+      - CognitoStack
+      - Outputs.UserPoolId
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value:
+      Fn::GetAtt:
+      - CognitoStack
+      - Outputs.UserPoolClientId
