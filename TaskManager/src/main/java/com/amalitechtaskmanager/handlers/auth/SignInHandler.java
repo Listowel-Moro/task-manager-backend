@@ -27,26 +27,6 @@ public class SignInHandler implements RequestHandler<APIGatewayProxyRequestEvent
     private final ObjectMapper objectMapper;
     private static final Logger logger = Logger.getLogger(SignInHandler.class.getName());
 
-//    public SignInHandler() {
-//        // Get the region from environment variable
-//        String regionName = System.getenv("AWS_REGION");
-//        Region region = regionName != null ? Region.of(regionName) : Region.EU_CENTRAL_1;
-//
-//        // Initialize clients with explicit region
-//        this.cognitoClient = CognitoIdentityProviderClient.builder()
-//                .region(region)
-//                .build();
-//
-//        this.sfnClient = SfnClient.builder()
-//                .region(region)
-//                .build();
-//
-//        this.clientId = System.getenv("USER_POOL_CLIENT_ID");
-//        this.userPoolId = System.getenv("USER_POOL_ID");
-//        this.teamMemberSubscriptionStepFunctionArn = System.getenv("TEAM_MEMBER_SUBSCRIPTION_STEP_FUNCTION_ARN");
-//        this.objectMapper = new ObjectMapper();
-//    }
-
     public SignInHandler() {
         // Get the region from environment variable
         String regionName = System.getenv("AWS_REGION");
@@ -62,14 +42,7 @@ public class SignInHandler implements RequestHandler<APIGatewayProxyRequestEvent
                 .build();
 
         this.clientId = System.getenv("USER_POOL_CLIENT_ID");
-        // Parse User Pool ID from ARN if needed
-        String rawUserPoolId = System.getenv("USER_POOL_ID");
-        if (rawUserPoolId != null && rawUserPoolId.contains("userpool/")) {
-            // Extract the actual pool ID from the ARN format
-            this.userPoolId = rawUserPoolId.substring(rawUserPoolId.lastIndexOf("/") + 1);
-        } else {
-            this.userPoolId = rawUserPoolId;
-        }
+        this.userPoolId = System.getenv("USER_POOL_ID");
         this.teamMemberSubscriptionStepFunctionArn = System.getenv("TEAM_MEMBER_SUBSCRIPTION_STEP_FUNCTION_ARN");
         this.objectMapper = new ObjectMapper();
     }
