@@ -43,7 +43,7 @@ public class ResendTempPasswordHandler implements RequestHandler<APIGatewayProxy
         headers.put("Content-Type", "application/json");
         headers.put("Access-Control-Allow-Origin", "*");
         response.setHeaders(headers);
-
+//
         try {
             // Verify that the caller is an admin
             String authToken = input.getHeaders().get("Authorization");
