@@ -35,6 +35,7 @@ public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Notifi
         this.schedulerUtils = new SchedulerUtils(schedulerClient);
     }
 
+
     @Override
     public NotificationResponse handleRequest(DynamodbEvent event, Context context) {
         if (TARGET_LAMBDA_ARN == null || SCHEDULER_ROLE_ARN == null) {
