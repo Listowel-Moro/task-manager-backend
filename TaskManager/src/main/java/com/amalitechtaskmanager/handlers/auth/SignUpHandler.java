@@ -94,9 +94,23 @@ public class SignUpHandler implements RequestHandler<APIGatewayProxyRequestEvent
                 cognitoClient.adminAddUserToGroup(addUserToGroupRequest);
                 context.getLogger().log("User added to Admins group");
 
+                // Auto-verify email attribute
+                AttributeType emailVerifiedAttribute = AttributeType.builder()
+                        .name("email_verified")
+                        .value("true")
+                        .build();
+
+                AdminUpdateUserAttributesRequest verifyEmailRequest = AdminUpdateUserAttributesRequest.builder()
+                        .userPoolId(userPoolId)
+                        .username(email)
+                        .userAttributes(List.of(emailVerifiedAttribute))
+                        .build();
+
+                cognitoClient.adminUpdateUserAttributes(verifyEmailRequest);
+                context.getLogger().log("User email verified automatically");
 
                 response.setStatusCode(200);
-                response.setBody("{\"message\": \"User signed up and confirmed successfully\", \"userId\": \"" +
+                response.setBody("{\"message\": \"User signed up, confirmed, and email verified successfully\", \"userId\": \"" +
                         signUpResponse.userSub() + "\"}");
             } catch (UsernameExistsException e) {
                 // If user already exists, try to confirm them anyway
@@ -109,8 +123,24 @@ public class SignUpHandler implements RequestHandler<APIGatewayProxyRequestEvent
                             .build();
 
                     cognitoClient.adminConfirmSignUp(confirmRequest);
+
+                    // Also verify email for existing users
+                    AttributeType emailVerifiedAttribute = AttributeType.builder()
+                            .name("email_verified")
+                            .value("true")
+                            .build();
+
+                    AdminUpdateUserAttributesRequest verifyEmailRequest = AdminUpdateUserAttributesRequest.builder()
+                            .userPoolId(userPoolId)
+                            .username(email)
+                            .userAttributes(List.of(emailVerifiedAttribute))
+                            .build();
+
+                    cognitoClient.adminUpdateUserAttributes(verifyEmailRequest);
+                    context.getLogger().log("Existing user email verified automatically");
+
                     response.setStatusCode(200);
-                    response.setBody("{\"message\": \"User already exists and has been confirmed\"}");
+                    response.setBody("{\"message\": \"User already exists, has been confirmed, and email verified\"}");
                 } catch (Exception confirmException) {
                     if (confirmException.getMessage().contains("User does not exist")) {
                         response.setStatusCode(404);

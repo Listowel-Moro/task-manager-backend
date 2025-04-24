@@ -1,55 +1,55 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
-Description: Event Related Template.
-
-
-Parameters:
-  Environment:
-    Type: String
-    Default: Production
-    AllowedValues:
-      - Development
-      - Staging
-      - Production
-    Description: Environment for the deployment
-
-Resources:
-  EventBridgeSchedulerRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub EventBridgeSchedulerRole-${Environment}
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - scheduler.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      ManagedPolicyArns:
-        - !Ref EventBridgeSchedulerPolicy
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Service
-          Value: TaskManagement
-
-  EventBridgeSchedulerPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      ManagedPolicyName: !Sub EventBridgeSchedulerPolicy-${Environment}
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - NotAction: "*"
-            Effect: Deny
-            Resource: "*"
-
-Outputs:
-  EventBridgeSchedulerRoleArn:
-    Description: ARN of the EventBridge Scheduler Role
-    Value: !GetAtt EventBridgeSchedulerRole.Arn
-  EventBridgeSchedulerPolicyArn:
-    Description: ARN of the EventBridge Scheduler Policy
-    Value: !Ref EventBridgeSchedulerPolicy
+#AWSTemplateFormatVersion: '2010-09-09'
+#Transform: AWS::Serverless-2016-10-31
+#Description: Event Related Template.
+#
+#
+#Parameters:
+#  Environment:
+#    Type: String
+#    Default: Production
+#    AllowedValues:
+#      - Development
+#      - Staging
+#      - Production
+#    Description: Environment for the deployment
+#
+#Resources:
+#  EventBridgeSchedulerRole:
+#    Type: AWS::IAM::Role
+#    Properties:
+#      RoleName: !Sub EventBridgeSchedulerRole-${Environment}
+#      AssumeRolePolicyDocument:
+#        Version: '2012-10-17'
+#        Statement:
+#          - Effect: Allow
+#            Principal:
+#              Service:
+#                - scheduler.amazonaws.com
+#            Action:
+#              - sts:AssumeRole
+#      ManagedPolicyArns:
+#        - !Ref EventBridgeSchedulerPolicy
+#      Tags:
+#        - Key: Environment
+#          Value: !Ref Environment
+#        - Key: Service
+#          Value: TaskManagement
+#
+#  EventBridgeSchedulerPolicy:
+#    Type: AWS::IAM::ManagedPolicy
+#    Properties:
+#      ManagedPolicyName: !Sub EventBridgeSchedulerPolicy-${Environment}
+#      PolicyDocument:
+#        Version: '2012-10-17'
+#        Statement:
+#          - NotAction: "*"
+#            Effect: Deny
+#            Resource: "*"
+#
+#Outputs:
+#  EventBridgeSchedulerRoleArn:
+#    Description: ARN of the EventBridge Scheduler Role
+#    Value: !GetAtt EventBridgeSchedulerRole.Arn
+#  EventBridgeSchedulerPolicyArn:
+#    Description: ARN of the EventBridge Scheduler Policy
+#    Value: !Ref EventBridgeSchedulerPolicy
