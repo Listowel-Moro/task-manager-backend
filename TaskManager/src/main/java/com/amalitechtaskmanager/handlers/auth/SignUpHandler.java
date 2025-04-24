@@ -9,7 +9,6 @@ import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityPr
 import software.amazon.awssdk.services.cognitoidentityprovider.model.*;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -22,34 +21,19 @@ public class SignUpHandler implements RequestHandler<APIGatewayProxyRequestEvent
     public SignUpHandler() {
         this.cognitoClient = CognitoIdentityProviderClient.create();
         this.clientId = System.getenv("USER_POOL_CLIENT_ID");
-
-        // Parse User Pool ID from ARN if needed
-        String rawUserPoolId = System.getenv("USER_POOL_ID");
-        if (rawUserPoolId != null && rawUserPoolId.contains("userpool/")) {
-            // Extract the actual pool ID from the ARN format
-            this.userPoolId = rawUserPoolId.substring(rawUserPoolId.lastIndexOf("/") + 1);
-        } else {
-            this.userPoolId = rawUserPoolId;
-        }
-
+        this.userPoolId = System.getenv("USER_POOL_ID");
         this.objectMapper = new ObjectMapper();
     }
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
         APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Content-Type", "application/json");
-        headers.put("Access-Control-Allow-Origin", "*");
-        headers.put("Access-Control-Allow-Methods", "POST, OPTIONS");
-        headers.put("Access-Control-Allow-Headers", "Content-Type,Authorization");
-        response.setHeaders(headers);
+        response.setHeaders(Map.of("Content-Type", "application/json"));
 
         try {
-            // Log environment variables for debugging
+            // Log environment variables to debug
             context.getLogger().log("ClientId: " + clientId);
-            context.getLogger().log("Raw User Pool ID: " + System.getenv("USER_POOL_ID"));
-            context.getLogger().log("Processed User Pool ID: " + userPoolId);
+            context.getLogger().log("UserPoolId: " + userPoolId);
 
             if (clientId == null || userPoolId == null) {
                 response.setStatusCode(500);
@@ -100,6 +84,16 @@ public class SignUpHandler implements RequestHandler<APIGatewayProxyRequestEvent
                 cognitoClient.adminConfirmSignUp(confirmRequest);
                 context.getLogger().log("User confirmed successfully");
 
+                // Add user to the "Admins" group
+                AdminAddUserToGroupRequest addUserToGroupRequest = AdminAddUserToGroupRequest.builder()
+                        .userPoolId(userPoolId)
+                        .username(email)
+                        .groupName("Admins")
+                        .build();
+
+                cognitoClient.adminAddUserToGroup(addUserToGroupRequest);
+                context.getLogger().log("User added to Admins group");
+
                 // Auto-verify email attribute
                 AttributeType emailVerifiedAttribute = AttributeType.builder()
                         .name("email_verified")
@@ -115,20 +109,9 @@ public class SignUpHandler implements RequestHandler<APIGatewayProxyRequestEvent
                 cognitoClient.adminUpdateUserAttributes(verifyEmailRequest);
                 context.getLogger().log("User email verified automatically");
 
-                // Add user to the "Admins" group
-                AdminAddUserToGroupRequest addUserToGroupRequest = AdminAddUserToGroupRequest.builder()
-                        .userPoolId(userPoolId)
-                        .username(email)
-                        .groupName("Admins")
-                        .build();
-
-                cognitoClient.adminAddUserToGroup(addUserToGroupRequest);
-                context.getLogger().log("User added to Admins group");
-
                 response.setStatusCode(200);
                 response.setBody("{\"message\": \"User signed up, confirmed, and email verified successfully\", \"userId\": \"" +
                         signUpResponse.userSub() + "\"}");
-
             } catch (UsernameExistsException e) {
                 // If user already exists, try to confirm them anyway
                 context.getLogger().log("User already exists, attempting to confirm: " + e.getMessage());
@@ -140,7 +123,6 @@ public class SignUpHandler implements RequestHandler<APIGatewayProxyRequestEvent
                             .build();
 
                     cognitoClient.adminConfirmSignUp(confirmRequest);
-                    context.getLogger().log("Existing user confirmed successfully");
 
                     // Also verify email for existing users
                     AttributeType emailVerifiedAttribute = AttributeType.builder()
@@ -156,21 +138,6 @@ public class SignUpHandler implements RequestHandler<APIGatewayProxyRequestEvent
 
                     cognitoClient.adminUpdateUserAttributes(verifyEmailRequest);
                     context.getLogger().log("Existing user email verified automatically");
-
-                    // Try to add existing user to Admins group
-                    try {
-                        AdminAddUserToGroupRequest addUserToGroupRequest = AdminAddUserToGroupRequest.builder()
-                                .userPoolId(userPoolId)
-                                .username(email)
-                                .groupName("Admins")
-                                .build();
-
-                        cognitoClient.adminAddUserToGroup(addUserToGroupRequest);
-                        context.getLogger().log("Existing user added to Admins group");
-                    } catch (Exception groupException) {
-                        context.getLogger().log("Error adding user to Admins group: " + groupException.getMessage());
-                        // Continue with the flow even if adding to group fails
-                    }
 
                     response.setStatusCode(200);
                     response.setBody("{\"message\": \"User already exists, has been confirmed, and email verified\"}");
