@@ -92,7 +92,7 @@ Resources:
     Properties:
       FunctionName: SignUpFunction
       CodeUri: TaskManager/
-      Handler: com.amalitechtaskmanager.handlers.auth.SignUpHandler::handleRequest
+      Handler:  com.amalitechtaskmanager.handlers.auth.SignUpHandler::handleRequest
       Runtime: java21
       MemorySize: 512
       Timeout: 30
