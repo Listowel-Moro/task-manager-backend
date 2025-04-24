@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.amalitechtaskmanager.factories.ObjectMapperFactory;
 import com.amalitechtaskmanager.model.Task;
 import com.amalitechtaskmanager.model.TaskStatus;
 import com.amalitechtaskmanager.utils.SchedulerUtils;
@@ -50,7 +51,7 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
             task.setDescription(task.getDescription() != null ? task.getDescription() : "");
             task.setCreatedAt(LocalDateTime.now());
             // Store task in DynamoDB
-
+            context.getLogger().log("Queue URL: " + taskAssignmentQueue);
 
             DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
             String createdAt=task.getCreatedAt().format(formatter);
@@ -68,6 +69,19 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
                     .item(item)
                     .build());
             // Send task assignment to SQS
+            try {
+                sqsClient.sendMessage(SendMessageRequest.builder()
+                        .queueUrl(taskAssignmentQueue)
+                        .messageBody(objectMapper.writeValueAsString(task))
+                        .messageGroupId("task-assignments")
+                        .build());
+                context.getLogger().log("Message sent to the fifo queue");
+            }
+            catch (Exception e){
+                context.getLogger().log("SQS Error: " + e.getMessage());
+                throw e;
+            }
+            context.getLogger().log("Sending to FIFO queue with messageGroupId: task-assignments");
             sqsClient.sendMessage(SendMessageRequest.builder()
                     .queueUrl(taskAssignmentQueue)
                     .messageBody(objectMapper.writeValueAsString(task))
@@ -94,6 +108,8 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
                     .withHeaders(Map.of("Content-Type", "application/json"));
         } catch (Exception e) {
             context.getLogger().log("Error: " + e.getMessage());
+            context.getLogger().log("Queue URL: " + taskAssignmentQueue);
+
             return new APIGatewayProxyResponseEvent()
                     .withStatusCode(500)
                     .withBody("{\"error\": \"" + e.getMessage() + "\"}");
