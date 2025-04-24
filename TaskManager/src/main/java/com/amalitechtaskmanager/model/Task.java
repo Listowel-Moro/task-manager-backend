@@ -105,19 +105,19 @@ public class Task {
 
 
     public void setCompletedAt(LocalDateTime completedAt) {
-        if (this.status == TaskStatus.COMPLETED) {
-            this.completedAt = completedAt;
-        } else {
+        if (completedAt != null && this.status != TaskStatus.COMPLETED) {
             throw new CannotSetCompletedAtException("Cannot set completedAt unless status is COMPLETED");
         }
+        this.completedAt = completedAt;
     }
 
     public void setExpiredAt(LocalDateTime expiredAt) {
         if (this.status == TaskStatus.EXPIRED) {
             this.expiredAt = expiredAt;
-        } else {
-            throw new IllegalStateException("Cannot set expiredAt unless status is EXPIRED");
         }
+//        } else {
+//            throw new IllegalStateException("Cannot set expiredAt unless status is EXPIRED");
+//        }
     }
 
     /**

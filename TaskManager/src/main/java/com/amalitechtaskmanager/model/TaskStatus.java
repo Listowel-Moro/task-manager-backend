@@ -4,6 +4,7 @@ public enum TaskStatus {
 
     OPEN,
     COMPLETED,
-    EXPIRED
+    EXPIRED,
+    CLOSED
 
 }
