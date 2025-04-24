@@ -13,11 +13,11 @@ public class CognitoUtils {
 
     private static final Logger logger = LoggerFactory.getLogger(CognitoUtils.class);
 
-    public static Optional<String> getUserEmail(CognitoIdentityProviderClient client, String userPoolId, String userId) {
+    public static Optional<String> getUserEmail(CognitoIdentityProviderClient client, String userPoolId, String userEmail) {
         try {
             AdminGetUserRequest request = AdminGetUserRequest.builder()
                     .userPoolId(userPoolId)
-                    .username(userId)
+                    .username(userEmail)
                     .build();
 
             AdminGetUserResponse response = client.adminGetUser(request);
@@ -27,7 +27,7 @@ public class CognitoUtils {
                     .findFirst();
 
         } catch (Exception e) {
-            logger.error("Failed to fetch user {}: {}", userId, e.getMessage());
+            logger.error("Failed to fetch user {}: {}", userEmail, e.getMessage());
             return Optional.empty();
         }
     }

@@ -39,6 +39,9 @@ public class Task {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime completedAt;
 
+    @JsonProperty("user_email")
+    private String userEmail;
+
     @JsonProperty("userId")
     private String userId;
 
@@ -47,7 +50,7 @@ public class Task {
 
     public Task(String taskId, String name, String description, TaskStatus status,
                 LocalDateTime deadline,
-                LocalDateTime completedAt, String userComment ,String  userId) {
+                LocalDateTime completedAt, String userComment ,String userId,String  userEmail) {
 
         this.taskId = taskId;
         this.name = name;
@@ -55,7 +58,8 @@ public class Task {
         this.status = status;
         this.deadline = deadline;
         this.userComment = userComment;
-        this.userId= userId;
+        this.userId = userId;
+        this.userEmail= userEmail;
 
         // Validate that completedAt is only set if status == COMPLETED
         if (status == TaskStatus.COMPLETED) {

@@ -70,23 +70,23 @@ public class ReminderProcessorLambda implements RequestHandler<ScheduledEvent, N
             return new NotificationResponse(false, "Task is not active for taskId: " + taskId);
         }
 
-        Optional<String> userIdOpt = Optional.ofNullable(taskItem.get("userId")).map(AttributeValue::s);
+        Optional<String> userEmailOpt = Optional.ofNullable(taskItem.get("user_email")).map(AttributeValue::s);
         Optional<String> titleOpt = Optional.ofNullable(taskItem.get("title")).map(AttributeValue::s);
         Optional<String> deadlineOpt = Optional.ofNullable(taskItem.get("deadline")).map(AttributeValue::s);
 
-        if (userIdOpt.isEmpty() || deadlineOpt.isEmpty()) {
-            logger.error("Missing userId or deadline for taskId: {}", taskId);
-            return new NotificationResponse(false, "Missing userId or deadline for taskId: " + taskId);
+        if (userEmailOpt.isEmpty() || deadlineOpt.isEmpty()) {
+            logger.error("Missing userEmail or deadline for taskId: {}", taskId);
+            return new NotificationResponse(false, "Missing userEmail or deadline for taskId: " + taskId);
         }
 
-        String userId = userIdOpt.get();
+        String userEmail = userEmailOpt.get();
         String title = titleOpt.orElse("Untitled");
         String deadline = deadlineOpt.get();
 
-        Optional<String> emailOpt = CognitoUtils.getUserEmail(cognitoClient, USER_POOL_ID, userId);
+        Optional<String> emailOpt = CognitoUtils.getUserEmail(cognitoClient, USER_POOL_ID, userEmail);
         if (emailOpt.isEmpty()) {
-            logger.error("No email found for userId: {}", userId);
-            return new NotificationResponse(false, "No email found for assigneeId: " + userId);
+            logger.error("No email found for userEmail: {}", userEmail);
+            return new NotificationResponse(false, "No email found for assigneeId: " + userEmail);
         }
 
         SnsUtils.sendNotification(snsClient, SNS_TOPIC_ARN, emailOpt.get(), title, deadline, taskId);

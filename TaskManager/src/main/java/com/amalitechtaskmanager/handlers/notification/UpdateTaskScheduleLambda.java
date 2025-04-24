@@ -79,8 +79,8 @@ public class UpdateTaskScheduleLambda implements RequestHandler<DynamodbEvent, N
 
                 Optional<String> newDeadlineStr = SchedulerUtils.getAttributeValue(newImage.get("deadline"));
                 Optional<String> oldDeadlineStr = SchedulerUtils.getAttributeValue(oldImage.get("deadline"));
-                Optional<String> newAssignee = SchedulerUtils.getAttributeValue(newImage.get("userId"));
-                Optional<String> oldAssignee = SchedulerUtils.getAttributeValue(oldImage.get("userId"));
+                Optional<String> newAssignee = SchedulerUtils.getAttributeValue(newImage.get("user_email"));
+                Optional<String> oldAssignee = SchedulerUtils.getAttributeValue(oldImage.get("user_email"));
 
                 if (newDeadlineStr.isEmpty()) {
                     logger.warn("Missing deadline for taskId: {}", taskId);
