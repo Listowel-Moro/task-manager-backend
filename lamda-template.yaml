@@ -1,221 +1,221 @@
-#AWSTemplateFormatVersion: '2010-09-09'
-#Transform: AWS::Serverless-2016-10-31
-#Description: Lambda Functions for Task Management System Backend
-#
-#Parameters:
-#  UserPoolId:
-#    Type: String
-#    Description: Cognito User Pool ID
-#  UserPoolClientId:
-#    Type: String
-#    Description: Cognito User Pool Client ID
-#  TasksTableName:
-#    Type: String
-#    Description: DynamoDB Tasks Table Name
-#  TaskAssignmentQueueArn:
-#    Type: String
-#    Description: SQS Task Assignment Queue ARN
-#  TaskAssignmentNotificationTopicArn:
-#    Type: String
-#    Description: SNS Task Assignment Notification Topic ARN
-#  Environment:
-#    Type: String
-#    Description: Deployment environment (dev, staging, prod)
-#  TaskExpirationNotificationTopic:
-#    Type: String
-#    Description: ARN of the Task Expiration Notification SNS Topic
-#  TaskDeadlineNotificationTopic:
-#    Type: String
-#    Description: ARN of the Task Deadline Notification SNS Topic
-#
-#Globals:
-#  Function:
-#    Runtime: java21
-#    MemorySize: 512
-#    Timeout: 30
-#    CodeUri: TaskManager/
-#  Api:
-#    Auth:
-#      DefaultAuthorizer: CognitoAuthorizer
-#      Authorizers:
-#        CognitoAuthorizer:
-#          UserPoolArn: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
-#
-#Resources:
-#  LambdaExecutionRole:
-#    Type: AWS::IAM::Role
-#    Properties:
-#      AssumeRolePolicyDocument:
-#        Version: '2012-10-17'
-#        Statement:
-#          - Effect: Allow
-#            Principal:
-#              Service: lambda.amazonaws.com
-#            Action: sts:AssumeRole
-#      Policies:
-#        - PolicyName: LambdaPolicy
-#          PolicyDocument:
-#            Version: '2012-10-17'
-#            Statement:
-#              - Effect: Allow
-#                Action:
-#                  - logs:CreateLogGroup
-#                  - logs:CreateLogStream
-#                  - logs:PutLogEvents
-#                Resource: '*'
-#              - Effect: Allow
-#                Action:
-#                  - cognito-idp:*
-#                Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
-#              - Effect: Allow
-#                Action:
-#                  - dynamodb:*
-#                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TasksTableName}"
-#              - Effect: Allow
-#                Action:
-#                  - sqs:SendMessage
-#                  - sqs:ReceiveMessage
-#                  - sqs:DeleteMessage
-#                  - sqs:GetQueueAttributes
-#                Resource: !Ref TaskAssignmentQueueArn
-#              - Effect: Allow
-#                Action:
-#                  - sns:Publish
-#                Resource:
-#                  - !Ref TaskAssignmentNotificationTopicArn
-#                  - !Ref TaskExpirationNotificationTopic
-#                  - !Ref TaskDeadlineNotificationTopic
-#
-#      Tags:
-#        - Key: Component
-#          Value: Lambda
-#
-#  EventBridgeSchedulerRole:
-#    Type: AWS::IAM::Role
-#    Properties:
-#      AssumeRolePolicyDocument:
-#        Version: '2012-10-17'
-#        Statement:
-#          - Effect: Allow
-#            Principal:
-#              Service: scheduler.amazonaws.com
-#            Action: sts:AssumeRole
-#      Policies:
-#        - PolicyName: SchedulerPolicy
-#          PolicyDocument:
-#            Version: '2012-10-17'
-#            Statement:
-#              - Effect: Allow
-#                Action:
-#                  - lambda:InvokeFunction
-#                Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ReminderProcessorLambda-${Environment}"
-#
-#  CreateTaskFunction:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      Handler: com.amalitechtaskmanager.handlers.task.CreateTaskHandler::handleRequest
-#      Role: !GetAtt LambdaExecutionRole.Arn
-#      Environment:
-#        Variables:
-#          TASKS_TABLE: !Ref TasksTableName
-#          TASK_ASSIGNMENT_QUEUE: !Ref TaskAssignmentQueueArn
-#      Events:
-#        Api:
-#          Type: Api
-#          Properties:
-#            Path: /tasks
-#            Method: POST
-#      Tags:
-#        Component: Lambda
-#
-#  ProcessTaskAssignmentFunction:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      Handler: com.amalitechtaskmanager.handlers.task.ProcessTaskAssignmentHandler::handleRequest
-#      Role: !GetAtt LambdaExecutionRole.Arn
-#      Environment:
-#        Variables:
-#          SNS_TOPIC_ARN: !Ref TaskAssignmentNotificationTopicArn
-#      Events:
-#        SqsEvent:
-#          Type: SQS
-#          Properties:
-#            Queue: !Ref TaskAssignmentQueueArn
-#            BatchSize: 10
-#      Tags:
-#        Component: Lambda
-#
-#  GetAdminTasksFunction:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      Handler: com.amalitechtaskmanager.handlers.task.GetAdminTasksHandler::handleRequest
-#      Role: !GetAtt LambdaExecutionRole.Arn
-#      Environment:
-#        Variables:
-#          TASKS_TABLE: !Ref TasksTableName
-#      Events:
-#        GetAdminTasksApi:
-#          Type: Api
-#          Properties:
-#            Path: /tasks
-#            Method: GET
-#      Tags:
-#        Component: Lambda
-#
-#  GetAdminTaskFunction:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      Handler: com.amalitechtaskmanager.handlers.task.MemberGetTaskHandler::handleRequest
-#      Role: !GetAtt LambdaExecutionRole.Arn
-#      Environment:
-#        Variables:
-#          TASKS_TABLE: !Ref TasksTableName
-#      Events:
-#        GetAdminTask:
-#          Type: Api
-#          Properties:
-#            Path: /tasks/{taskId}
-#            Method: GET
-#      Tags:
-#        Component: Lambda
-#
-#
-#  GetAdminAnalyticsFunction:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      Handler: com.amalitechtaskmanager.handlers.task.GetAdminAnalyticsHandler::handleRequest
-#      Role: !GetAtt LambdaExecutionRole.Arn
-#      Environment:
-#        Variables:
-#          TASKS_TABLE: !Ref TasksTableName
-#      Events:
-#        GetAdminAnalyticsApi:
-#          Type: Api
-#          Properties:
-#            Path: /tasks/analytics
-#            Method: GET
-#      Tags:
-#        Component: Lambda
-#
-#  TaskExpirationHandlerFunction:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      FunctionName: !Sub TaskExpirationHandler-${Environment}
-#      Handler: com.amalitechtaskmanager.handlers.task.TaskExpirationHandler::handleRequest
-#      Role: !GetAtt LambdaExecutionRole.Arn
-#      Environment:
-#        Variables:
-#          TASKS_TABLE: !Ref TasksTableName
-#          TASK_EXPIRATION_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationNotificationTopic
-#          TASK_DEADLINE_NOTIFICATION_TOPIC_ARN: !Ref TaskDeadlineNotificationTopic
-#      Events:
-#        TaskExpirationSchedule:
-#          Type: Schedule
-#          Properties:
-#            Schedule: rate(1 day)
-#            Enabled: true
-#
-#Outputs:
-#  ApiUrl:
-#    Description: API Gateway endpoint URL
-#    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Lambda Functions for Task Management System Backend
+
+Parameters:
+  UserPoolId:
+    Type: String
+    Description: Cognito User Pool ID
+  UserPoolClientId:
+    Type: String
+    Description: Cognito User Pool Client ID
+  TasksTableName:
+    Type: String
+    Description: DynamoDB Tasks Table Name
+  TaskAssignmentQueueArn:
+    Type: String
+    Description: SQS Task Assignment Queue ARN
+  TaskAssignmentNotificationTopicArn:
+    Type: String
+    Description: SNS Task Assignment Notification Topic ARN
+  Environment:
+    Type: String
+    Description: Deployment environment (dev, staging, prod)
+  TaskExpirationNotificationTopic:
+    Type: String
+    Description: ARN of the Task Expiration Notification SNS Topic
+  TaskDeadlineNotificationTopic:
+    Type: String
+    Description: ARN of the Task Deadline Notification SNS Topic
+
+Globals:
+  Function:
+    Runtime: java21
+    MemorySize: 512
+    Timeout: 30
+    CodeUri: TaskManager/
+  Api:
+    Auth:
+      DefaultAuthorizer: CognitoAuthorizer
+      Authorizers:
+        CognitoAuthorizer:
+          UserPoolArn: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
+
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - cognito-idp:*
+                Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
+              - Effect: Allow
+                Action:
+                  - dynamodb:*
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TasksTableName}"
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !Ref TaskAssignmentQueueArn
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource:
+                  - !Ref TaskAssignmentNotificationTopicArn
+                  - !Ref TaskExpirationNotificationTopic
+                  - !Ref TaskDeadlineNotificationTopic
+
+      Tags:
+        - Key: Component
+          Value: Lambda
+
+  EventBridgeSchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SchedulerPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ReminderProcessorLambda-${Environment}"
+
+  CreateTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: com.amalitechtaskmanager.handlers.task.CreateTaskHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTableName
+          TASK_ASSIGNMENT_QUEUE: !Ref TaskAssignmentQueueArn
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /tasks
+            Method: POST
+      Tags:
+        Component: Lambda
+
+  ProcessTaskAssignmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: com.amalitechtaskmanager.handlers.task.ProcessTaskAssignmentHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref TaskAssignmentNotificationTopicArn
+      Events:
+        SqsEvent:
+          Type: SQS
+          Properties:
+            Queue: !Ref TaskAssignmentQueueArn
+            BatchSize: 10
+      Tags:
+        Component: Lambda
+
+  GetAdminTasksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: com.amalitechtaskmanager.handlers.task.GetAdminTasksHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTableName
+      Events:
+        GetAdminTasksApi:
+          Type: Api
+          Properties:
+            Path: /tasks
+            Method: GET
+      Tags:
+        Component: Lambda
+
+  GetAdminTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: com.amalitechtaskmanager.handlers.task.MemberGetTaskHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTableName
+      Events:
+        GetAdminTask:
+          Type: Api
+          Properties:
+            Path: /tasks/{taskId}
+            Method: GET
+      Tags:
+        Component: Lambda
+
+
+  GetAdminAnalyticsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: com.amalitechtaskmanager.handlers.task.GetAdminAnalyticsHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTableName
+      Events:
+        GetAdminAnalyticsApi:
+          Type: Api
+          Properties:
+            Path: /tasks/analytics
+            Method: GET
+      Tags:
+        Component: Lambda
+
+  TaskExpirationHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub TaskExpirationHandler-${Environment}
+      Handler: com.amalitechtaskmanager.handlers.task.TaskExpirationHandler::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTableName
+          TASK_EXPIRATION_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationNotificationTopic
+          TASK_DEADLINE_NOTIFICATION_TOPIC_ARN: !Ref TaskDeadlineNotificationTopic
+      Events:
+        TaskExpirationSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 day)
+            Enabled: true
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"

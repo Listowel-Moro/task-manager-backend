@@ -38,6 +38,58 @@ Resources:
         - Key: Component
           Value: Cognito
 
+  LambdaFunctionsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: lamda-template.yaml
+      Parameters:
+        UserPoolId: !GetAtt CognitoStack.Outputs.UserPoolId
+        UserPoolClientId: !GetAtt CognitoStack.Outputs.UserPoolClientId
+        TasksTableName: !GetAtt DynamoDBStack.Outputs.TasksTableName
+        TaskAssignmentQueueArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentQueueArn
+        TaskAssignmentNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentNotificationTopicArn
+        TaskDeadlineNotificationTopic: !GetAtt SnsSqsStack.Outputs.TaskDeadlineNotificationTopicArn
+        TaskExpirationNotificationTopic: !GetAtt SnsSqsStack.Outputs.TaskExpirationNotificationTopicArn
+        Environment: Production
+
+
+  DynamoDBStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: dynamodb-template.yaml
+      Tags:
+        - Key: Component
+          Value: DynamoDB
+
+  EventStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: event-template.yaml
+      Parameters:
+        Environment: Production  # Or use a parameter from main template
+      Tags:
+        - Key: Component
+          Value: Events
+
+  NotificationStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: notification-lambda-template.yaml
+      Parameters:
+        Environment: Production
+        TasksTableArn: !GetAtt DynamoDBStack.Outputs.TasksTableArn  # Assuming you have a DynamoDB stack
+        TasksTableName: !GetAtt DynamoDBStack.Outputs.TasksTableName
+        TasksTableStreamArn: !GetAtt DynamoDBStack.Outputs.TasksTableStreamArn
+        UserPoolId: !GetAtt CognitoStack.Outputs.UserPoolId
+        NotificationTopicArn: !GetAtt SnsSqsStack.Outputs.EmailNotificationTopicArn
+        EventBridgeSchedulerRoleArn: !GetAtt EventStack.Outputs.EventBridgeSchedulerRoleArn
+        AccountId: !Ref AWS::AccountId
+        Region: !Ref AWS::Region
+        TaskDeadlineNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskDeadlineNotificationTopicArn
+      Tags:
+        - Key: Component
+          Value: Notification
+
 Outputs:
   ApiUrlCognito:
     Description: API Gateway endpoint URL
@@ -48,3 +100,15 @@ Outputs:
   UserPoolClientId:
     Description: Cognito User Pool Client ID
     Value: !GetAtt CognitoStack.Outputs.UserPoolClientId
+  EventBridgeSchedulerRoleArn:
+    Description: EventBridge Scheduler Role ARN
+    Value: !GetAtt EventStack.Outputs.EventBridgeSchedulerRoleArn
+    CreateDeadlineEventLambdaArn:
+      Description: ARN of the Create Deadline Event Lambda
+      Value: !GetAtt NotificationStack.Outputs.CreateDeadlineEventLambdaArn
+    ReminderProcessorLambdaArn:
+      Description: ARN of the Reminder Processor Lambda
+      Value: !GetAtt NotificationStack.Outputs.ReminderProcessorLambdaArn
+    UpdateTaskScheduleLambdaArn:
+      Description: ARN of the Update Task Schedule Lambda
+      Value: !GetAtt NotificationStack.Outputs.UpdateTaskScheduleLambdaArn
