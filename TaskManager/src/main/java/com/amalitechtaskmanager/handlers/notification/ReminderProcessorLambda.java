@@ -1,5 +1,6 @@
 package com.amalitechtaskmanager.handlers.notification;
 
+import com.amalitechtaskmanager.utils.NotificationResponse;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.ScheduledEvent;
@@ -16,13 +17,13 @@ import software.amazon.awssdk.services.sns.SnsClient;
 import java.util.Map;
 import java.util.Optional;
 
-public class ReminderProcessorLambda implements RequestHandler<ScheduledEvent, Void> {
+public class ReminderProcessorLambda implements RequestHandler<ScheduledEvent, NotificationResponse> {
 
     private static final Logger logger = LoggerFactory.getLogger(ReminderProcessorLambda.class);
     private static final String USER_POOL_ID = System.getenv("USER_POOL_ID");
     private static final String TABLE_NAME = System.getenv("TABLE_NAME");
     private static final String SNS_TOPIC_ARN = System.getenv("SNS_TOPIC_ARN");
-    private static final String ACTIVE_STATUS = "active";
+    private static final String ACTIVE_STATUS = "OPEN";
 
     private final DynamoDbClient dynamoDbClient;
     private final CognitoIdentityProviderClient cognitoClient;
@@ -35,25 +36,28 @@ public class ReminderProcessorLambda implements RequestHandler<ScheduledEvent, V
     }
 
     @Override
-    public Void handleRequest(ScheduledEvent event, Context context) {
+    public NotificationResponse handleRequest(ScheduledEvent event, Context context) {
         if (USER_POOL_ID == null || TABLE_NAME == null || SNS_TOPIC_ARN == null) {
             logger.error("Missing required environment variables.");
-            return null;
+            return new NotificationResponse(false, "Missing required environment variables.");
         }
+        logger.info("Processing reminder event: {}", event);
 
         Optional<String> taskIdOpt = getTaskIdFromEvent(event);
+
         if (taskIdOpt.isEmpty()) {
             logger.error("Missing taskId in event payload.");
-            return null;
+            return new NotificationResponse(false, "Missing taskId in event payload.");
         }
 
         String taskId = taskIdOpt.get();
         logger.info("Processing reminder for taskId: {}", taskId);
 
         Optional<Map<String, AttributeValue>> taskOpt = DynamoDbUtils.getTask(dynamoDbClient, TABLE_NAME, taskId);
+        logger.info("Task found: {}", taskOpt.isPresent());
         if (taskOpt.isEmpty()) {
             logger.error("Task not found for taskId: {}", taskId);
-            return null;
+            return new NotificationResponse(false, "Task not found for taskId: " + taskId);
         }
 
         Map<String, AttributeValue> taskItem = taskOpt.get();
@@ -63,35 +67,36 @@ public class ReminderProcessorLambda implements RequestHandler<ScheduledEvent, V
 
         if (!ACTIVE_STATUS.equalsIgnoreCase(status)) {
             logger.warn("Task is not active for taskId: {}, status: {}", taskId, status);
-            return null;
+            return new NotificationResponse(false, "Task is not active for taskId: " + taskId);
         }
 
-        Optional<String> assigneeIdOpt = Optional.ofNullable(taskItem.get("assigneeId")).map(AttributeValue::s);
+        Optional<String> userIdOpt = Optional.ofNullable(taskItem.get("userId")).map(AttributeValue::s);
         Optional<String> titleOpt = Optional.ofNullable(taskItem.get("title")).map(AttributeValue::s);
         Optional<String> deadlineOpt = Optional.ofNullable(taskItem.get("deadline")).map(AttributeValue::s);
 
-        if (assigneeIdOpt.isEmpty() || deadlineOpt.isEmpty()) {
-            logger.error("Missing assigneeId or deadline for taskId: {}", taskId);
-            return null;
+        if (userIdOpt.isEmpty() || deadlineOpt.isEmpty()) {
+            logger.error("Missing userId or deadline for taskId: {}", taskId);
+            return new NotificationResponse(false, "Missing userId or deadline for taskId: " + taskId);
         }
 
-        String assigneeId = assigneeIdOpt.get();
+        String userId = userIdOpt.get();
         String title = titleOpt.orElse("Untitled");
         String deadline = deadlineOpt.get();
 
-        Optional<String> emailOpt = CognitoUtils.getUserEmail(cognitoClient, USER_POOL_ID, assigneeId);
+        Optional<String> emailOpt = CognitoUtils.getUserEmail(cognitoClient, USER_POOL_ID, userId);
         if (emailOpt.isEmpty()) {
-            logger.error("No email found for assigneeId: {}", assigneeId);
-            return null;
+            logger.error("No email found for userId: {}", userId);
+            return new NotificationResponse(false, "No email found for assigneeId: " + userId);
         }
 
         SnsUtils.sendNotification(snsClient, SNS_TOPIC_ARN, emailOpt.get(), title, deadline, taskId);
-        return null;
+        return new NotificationResponse(true, "Notification sent successfully.");
     }
 
     private Optional<String> getTaskIdFromEvent(ScheduledEvent event) {
         try {
             Map<String, Object> eventDetail = (Map<String, Object>) event.getDetail();
+            logger.info("Event detail: {}", eventDetail);
             return Optional.ofNullable(eventDetail)
                     .map(detail -> detail.get("taskId"))
                     .map(Object::toString);
