@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.amalitechtaskmanager.factories.ObjectMapperFactory;
 import com.amalitechtaskmanager.model.Task;
 import com.amalitechtaskmanager.model.TaskStatus;
 import com.amazonaws.services.lambda.runtime.Context;
@@ -21,7 +22,9 @@ import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     private final DynamoDbClient dynamoDbClient = DynamoDbClient.create();
     private final SqsClient sqsClient = SqsClient.create();
-    private final ObjectMapper objectMapper = new ObjectMapper();
+//    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = ObjectMapperFactory.getMapper();
+
     private final String tasksTable = System.getenv("TASKS_TABLE");
     private final String taskAssignmentQueue = System.getenv("TASK_ASSIGNMENT_QUEUE");
     @Override
@@ -40,7 +43,7 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
             task.setDescription(task.getDescription() != null ? task.getDescription() : "");
             task.setCreatedAt(LocalDateTime.now());
             // Store task in DynamoDB
-
+            context.getLogger().log("Queue URL: " + taskAssignmentQueue);
 
             DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
             String createdAt=task.getCreatedAt().format(formatter);
@@ -58,11 +61,19 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
                     .item(item)
                     .build());
             // Send task assignment to SQS
-            sqsClient.sendMessage(SendMessageRequest.builder()
-                    .queueUrl(taskAssignmentQueue)
-                    .messageBody(objectMapper.writeValueAsString(task))
-                    .messageGroupId("task-assignments")
-                    .build());
+            try {
+                sqsClient.sendMessage(SendMessageRequest.builder()
+                        .queueUrl(taskAssignmentQueue)
+                        .messageBody(objectMapper.writeValueAsString(task))
+                        .messageGroupId("task-assignments")
+                        .build());
+                context.getLogger().log("Message sent to the fifo queue");
+            }
+            catch (Exception e){
+                context.getLogger().log("SQS Error: " + e.getMessage());
+                throw e;
+            }
+            context.getLogger().log("Sending to FIFO queue with messageGroupId: task-assignments");
             Map<String, String> responseBody = new HashMap<>();
             responseBody.put("taskId", task.getTaskId());
             responseBody.put("message", "Task created and queued for assignment");
@@ -72,6 +83,8 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
                     .withHeaders(Map.of("Content-Type", "application/json"));
         } catch (Exception e) {
             context.getLogger().log("Error: " + e.getMessage());
+            context.getLogger().log("Queue URL: " + taskAssignmentQueue);
+
             return new APIGatewayProxyResponseEvent()
                     .withStatusCode(500)
                     .withBody("{\"error\": \"" + e.getMessage() + "\"}");
