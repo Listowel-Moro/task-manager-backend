@@ -103,12 +103,12 @@ Outputs:
   EventBridgeSchedulerRoleArn:
     Description: EventBridge Scheduler Role ARN
     Value: !GetAtt EventStack.Outputs.EventBridgeSchedulerRoleArn
-    CreateDeadlineEventLambdaArn:
-      Description: ARN of the Create Deadline Event Lambda
-      Value: !GetAtt NotificationStack.Outputs.CreateDeadlineEventLambdaArn
-    ReminderProcessorLambdaArn:
-      Description: ARN of the Reminder Processor Lambda
-      Value: !GetAtt NotificationStack.Outputs.ReminderProcessorLambdaArn
-    UpdateTaskScheduleLambdaArn:
-      Description: ARN of the Update Task Schedule Lambda
-      Value: !GetAtt NotificationStack.Outputs.UpdateTaskScheduleLambdaArn
+  CreateDeadlineEventLambdaArn:
+    Description: ARN of the Create Deadline Event Lambda
+    Value: !GetAtt NotificationStack.Outputs.CreateDeadlineEventLambdaArn
+  ReminderProcessorLambdaArn:
+    Description: ARN of the Reminder Processor Lambda
+    Value: !GetAtt NotificationStack.Outputs.ReminderProcessorLambdaArn
+  UpdateTaskScheduleLambdaArn:
+    Description: ARN of the Update Task Schedule Lambda
+    Value: !GetAtt NotificationStack.Outputs.UpdateTaskScheduleLambdaArn
