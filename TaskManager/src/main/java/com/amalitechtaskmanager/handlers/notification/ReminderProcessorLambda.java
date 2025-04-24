@@ -70,24 +70,23 @@ public class ReminderProcessorLambda implements RequestHandler<ScheduledEvent, N
             return new NotificationResponse(false, "Task is not active for taskId: " + taskId);
         }
 
-        Optional<String> assigneeIdOpt = Optional.ofNullable(taskItem.get("assigneeId")).map(AttributeValue::s);
+        Optional<String> userIdOpt = Optional.ofNullable(taskItem.get("userId")).map(AttributeValue::s);
         Optional<String> titleOpt = Optional.ofNullable(taskItem.get("title")).map(AttributeValue::s);
         Optional<String> deadlineOpt = Optional.ofNullable(taskItem.get("deadline")).map(AttributeValue::s);
-//        logger.info("Task details: assigneeId: {}, title: {}, deadline: {}", assigneeIdOpt, titleOpt, deadlineOpt);
 
-        if (assigneeIdOpt.isEmpty() || deadlineOpt.isEmpty()) {
-            logger.error("Missing assigneeId or deadline for taskId: {}", taskId);
-            return new NotificationResponse(false, "Missing assigneeId or deadline for taskId: " + taskId);
+        if (userIdOpt.isEmpty() || deadlineOpt.isEmpty()) {
+            logger.error("Missing userId or deadline for taskId: {}", taskId);
+            return new NotificationResponse(false, "Missing userId or deadline for taskId: " + taskId);
         }
 
-        String assigneeId = assigneeIdOpt.get();
+        String userId = userIdOpt.get();
         String title = titleOpt.orElse("Untitled");
         String deadline = deadlineOpt.get();
 
-        Optional<String> emailOpt = CognitoUtils.getUserEmail(cognitoClient, USER_POOL_ID, assigneeId);
+        Optional<String> emailOpt = CognitoUtils.getUserEmail(cognitoClient, USER_POOL_ID, userId);
         if (emailOpt.isEmpty()) {
-            logger.error("No email found for assigneeId: {}", assigneeId);
-            return new NotificationResponse(false, "No email found for assigneeId: " + assigneeId);
+            logger.error("No email found for userId: {}", userId);
+            return new NotificationResponse(false, "No email found for assigneeId: " + userId);
         }
 
         SnsUtils.sendNotification(snsClient, SNS_TOPIC_ARN, emailOpt.get(), title, deadline, taskId);

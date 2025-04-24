@@ -81,7 +81,7 @@ public class SchedulerUtils {
                             .input(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(inputPayload))
                             .build())
                     .build();
-
+            logger.info("Creating schedule for taskId: {} with payload {}", taskId, request);
             schedulerClient.createSchedule(request);
             logger.info("Created new schedule for taskId: {} at {}", taskId, reminderTime);
         } catch (Exception e) {
