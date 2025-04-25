@@ -108,7 +108,7 @@ Resources:
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
       StreamSpecification:
-        StreamViewType: NEW_IMAGE
+        StreamViewType: NEW_AND_OLD_IMAGES
       Tags:
         - Key: Component
           Value: DynamoDB
@@ -276,17 +276,20 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service:
-                - scheduler.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      ManagedPolicyArns:
-        - !Ref EventBridgeSchedulerPolicy
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Service
-          Value: TaskManagement
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub EventBridgeSchedulerPolicy-${Environment}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub
+                  - arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ReminderProcessorLambda-${Environment}
+                  - Environment: !Ref Environment
+
 
   EventBridgeSchedulerPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -349,7 +352,7 @@ Resources:
                         "Protocol": "email",
                         "Endpoint.$": "$.email",
                         "Attributes": {
-                          "FilterPolicy": "{\"user_id\": [\"$.user_id\"]}"
+                          "FilterPolicy": {"recipient_email.$": "States.Array($.email)" }
                         }
                       },
                       "End": true
@@ -367,7 +370,7 @@ Resources:
                         "Protocol": "email",
                         "Endpoint.$": "$.email",
                         "Attributes": {
-                          "FilterPolicy": "{\"user_id\": [\"$.user_id\"]}"
+                         "FilterPolicy": {"recipient_email.$": "States.Array($.email)" }
                         }
                       },
                       "End": true
@@ -385,7 +388,7 @@ Resources:
                         "Protocol": "email",
                         "Endpoint.$": "$.email",
                         "Attributes": {
-                          "FilterPolicy": "{\"assignee_id\": [\"$.user_id\"]}"
+                          "FilterPolicy": {"recipient_email.$": "States.Array($.email)" }
                         }
                       },
                       "End": true
@@ -401,7 +404,6 @@ Resources:
       Tags:
         - Key: Component
           Value: StepFunctions
-
   #============================================================================
   # Lambda Functions - Auth
   #============================================================================

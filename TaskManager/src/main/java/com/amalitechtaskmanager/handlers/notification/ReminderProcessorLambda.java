@@ -12,7 +12,6 @@ import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
-import software.amazon.awssdk.services.sns.SnsClient;
 
 import java.util.Map;
 import java.util.Optional;
@@ -27,12 +26,10 @@ public class ReminderProcessorLambda implements RequestHandler<ScheduledEvent, N
 
     private final DynamoDbClient dynamoDbClient;
     private final CognitoIdentityProviderClient cognitoClient;
-    private final SnsClient snsClient;
 
     public ReminderProcessorLambda() {
         this.dynamoDbClient = DynamoDbClient.create();
         this.cognitoClient = CognitoIdentityProviderClient.create();
-        this.snsClient = SnsClient.create();
     }
 
     @Override
@@ -88,8 +85,9 @@ public class ReminderProcessorLambda implements RequestHandler<ScheduledEvent, N
             logger.error("No email found for userId: {}", userId);
             return new NotificationResponse(false, "No email found for assigneeId: " + userId);
         }
-
-        SnsUtils.sendNotification(snsClient, SNS_TOPIC_ARN, emailOpt.get(), title, deadline, taskId);
+        String message = String.format("Reminder: Task '%s' (ID: %s) is due at %s.", title, taskId, deadline);
+        String subject = "Task Reminder";
+        SnsUtils.sendEmailNotification(SNS_TOPIC_ARN, emailOpt.get(), subject, message);
         return new NotificationResponse(true, "Notification sent successfully.");
     }
 

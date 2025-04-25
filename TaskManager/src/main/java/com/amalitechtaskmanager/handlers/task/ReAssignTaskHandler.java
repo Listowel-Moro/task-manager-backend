@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 import static com.amalitechtaskmanager.utils.ApiResponseUtil.createResponse;
+import static com.amalitechtaskmanager.utils.SnsUtils.sendEmailNotification;
 
 
 public class ReAssignTaskHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
@@ -24,7 +25,7 @@ public class ReAssignTaskHandler implements RequestHandler<APIGatewayProxyReques
     public static final String TABLE_NAME = System.getenv("TASKS_TABLE");
     private static final ObjectMapper objectMapper = ObjectMapperFactory.getMapper();
     private final DynamoDbClient dbClient = DynamoDbFactory.getClient();
-    //private final String TOPIC_ARN = "arn:aws:sns:us-east-1:123456789012:TaskNotificationTopic";
+    private final String TOPIC_ARN = "arn:aws:sns:us-east-1:123456789012:TaskNotificationTopic";
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent event, Context context) {
@@ -55,7 +56,9 @@ public class ReAssignTaskHandler implements RequestHandler<APIGatewayProxyReques
             String message = String.format(
                     "{ \"eventType\": \"TaskReassigned\", \"taskId\": \"%s\", \"oldAssignee\": \"%s\", \"newAssignee\": \"%s\" }",
                     taskId, oldUserId, newUserId);
-
+            String subject = "Task Reassigned: " + task.getName();
+            sendEmailNotification(TOPIC_ARN, task.getTaskId(), subject, message);
+            sendEmailNotification(TOPIC_ARN, oldUserId, subject, message);
 //            notifyUser(oldUserId, message);
 //            notifyUser(newUserId, message);
 
