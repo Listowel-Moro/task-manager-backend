@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Reminder</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: hsl(0, 0%, 98%); color: hsl(222.2, 84%, 4.9%);">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width: 600px; margin: 0 auto; background-color: hsl(0, 0%, 100%); border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+  <!-- Header -->
+  <tr>
+    <td style="padding: 30px 0; text-align: center; background-color: hsl(262, 60%, 58%); border-radius: 0.5rem 0.5rem 0 0;">
+<!--      <img src="/api/placeholder/120/45" alt="Company Logo" style="max-width: 120px; height: auto;" />-->
+      <h1 style="margin: 0; color: hsl(210, 40%, 98%); font-size: 24px;">Amilitech Task Management System</h1>
+    </td>
+  </tr>
+
+  <!-- Main Content -->
+  <tr>
+    <td style="padding: 30px;">
+      <h1 style="margin: 0 0 20px; color: hsl(222.2, 84%, 4.9%); font-size: 24px;">Task Deadline Reminder</h1>
+
+      <p style="margin: 0 0 20px; color: hsl(222.2, 47.4%, 11.2%); font-size: 16px; line-height: 1.5;">
+        Hello <span style="font-weight: bold;">{{recipient_name}}</span>,
+      </p>
+
+      <p style="margin: 0 0 20px; color: hsl(222.2, 47.4%, 11.2%); font-size: 16px; line-height: 1.5;">
+        This is a friendly reminder about a task that requires your attention.
+      </p>
+
+      <!-- Task Details Box -->
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 25px; background-color: hsl(210, 40%, 96.1%); border-radius: 0.5rem; border-left: 4px solid hsl(262, 60%, 58%);">
+        <tr>
+          <td style="padding: 20px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="padding: 10px 0; font-weight: bold; color: hsl(222.2, 47.4%, 11.2%);">Task:</td>
+                <td style="padding: 10px 0; color: hsl(222.2, 47.4%, 11.2%);">{{task_name}}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0; font-weight: bold; color: hsl(222.2, 47.4%, 11.2%);">Description:</td>
+                <td style="padding: 10px 0; color: hsl(222.2, 47.4%, 11.2%);">{{task_description}}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0; font-weight: bold; color: hsl(222.2, 47.4%, 11.2%);">Due Date:</td>
+                <td style="padding: 10px 0; color: hsl(222.2, 47.4%, 11.2%);">{{due_date}}</td>
+              </tr>
+<!--              <tr>-->
+<!--                <td style="padding: 10px 0; font-weight: bold; color: hsl(222.2, 47.4%, 11.2%);">Priority:</td>-->
+<!--                <td style="padding: 10px 0;">-->
+<!--                                        <span style="padding: 5px 10px; border-radius: 0.25rem; font-size: 14px;-->
+<!--                                        background-color: {{#if priority_high}}hsl(0, 84.2%, 60.2%){{else if priority_medium}}hsl(38, 92%, 50%){{else}}hsl(142, 76%, 36%){{/if}};-->
+<!--                                        color: hsl(210, 40%, 98%);">-->
+<!--                                            {{priority_level}}-->
+<!--                                        </span>-->
+<!--                </td>-->
+<!--              </tr>-->
+<!--              <tr>-->
+<!--                <td style="padding: 10px 0; font-weight: bold; color: hsl(222.2, 47.4%, 11.2%);">Assigned By:</td>-->
+<!--                <td style="padding: 10px 0; color: hsl(222.2, 47.4%, 11.2%);">{{assigned_by}}</td>-->
+<!--              </tr>-->
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Status Bar -->
+      <div style="margin: 0 0 25px; background-color: hsl(214.3, 31.8%, 91.4%); border-radius: 0.25rem; height: 10px; width: 100%;">
+        <div style="background-color: hsl(262, 60%, 58%); width: {{completion_percentage}}%; height: 10px; border-radius: 0.25rem;"></div>
+      </div>
+<!--      <p style="margin: 0 0 25px; color: hsl(215.4, 16.3%, 46.9%); font-size: 14px; text-align: center;">-->
+<!--        Task Completion: {{completion_percentage}}%-->
+<!--      </p>-->
+
+      <!-- Call to Action Button -->
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 25px;">
+        <tr>
+          <td align="center">
+            <a href="{{task_url}}" style="display: inline-block; padding: 12px 24px; background-color: hsl(262, 60%, 58%); color: hsl(210, 40%, 98%); text-decoration: none; font-weight: bold; border-radius: 0.5rem; font-size: 16px;">
+              View Task Details
+            </a>
+          </td>
+        </tr>
+      </table>
+
+      <p style="margin: 0 0 10px; color: hsl(222.2, 47.4%, 11.2%); font-size: 16px; line-height: 1.5;">
+        If you have any questions or need assistance, please contact your team lead.
+      </p>
+
+      <p style="margin: 0; color: hsl(222.2, 47.4%, 11.2%); font-size: 16px; line-height: 1.5;">
+        Thank you,<br />
+        Amilitech Task Management Team
+      </p>
+    </td>
+  </tr>
+
+  <!-- Footer -->
+  <tr>
+    <td style="padding: 20px; text-align: center; background-color: hsl(262, 60%, 92%); border-radius: 0 0 0.5rem 0.5rem;">
+      <p style="margin: 0 0 10px; color: hsl(222.2, 47.4%, 11.2%); font-size: 14px;">
+        This is an automated reminder from the Amilitech Task Management System
+      </p>
+      <script>
+        var year = new Date().getFullYear();
+      </script>
+      <p style="margin: 0; color: hsl(215.4, 16.3%, 46.9%); font-size: 12px;">
+        © <script>document.write(year);</script> Amilitech. All rights reserved.
+      </p>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

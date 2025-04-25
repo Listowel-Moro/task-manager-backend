@@ -53,9 +53,69 @@ public class DynamoDbUtils {
                 task.setCompletedAt(LocalDateTime.parse(completedAtStr, DateTimeFormatter.ISO_DATE_TIME));
             } catch (Exception ignored) {}
         });
+        
+        getSafeString(image, "expired_at").ifPresent(expiredAtStr -> {
+            try {
+                task.setExpiredAt(LocalDateTime.parse(expiredAtStr, DateTimeFormatter.ISO_DATE_TIME));
+            } catch (Exception ignored) {}
+        });
 
         return Optional.of(task);
     }
+    
+    /**
+     * Parse a task from AWS SDK v2 AttributeValue map
+     */
+    public static Optional<Task> parseTaskFromSdk(Map<String, software.amazon.awssdk.services.dynamodb.model.AttributeValue> image) {
+        if (image == null || image.isEmpty()) return Optional.empty();
+
+        Task task = new Task();
+
+        getStringFromSdk(image, "taskId").ifPresent(task::setTaskId);
+        getStringFromSdk(image, "name").ifPresent(task::setName);
+        getStringFromSdk(image, "description").ifPresent(task::setDescription);
+        getStringFromSdk(image, "responsibility").ifPresent(task::setResponsibility);
+        getStringFromSdk(image, "user_comment").ifPresent(task::setUserComment);
+        getStringFromSdk(image, "userId").ifPresent(task::setUserId);
+
+        getStringFromSdk(image, "status").ifPresent(statusStr -> {
+            try {
+                task.setStatus(TaskStatus.valueOf(statusStr.toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                // Optionally log invalid status
+            }
+        });
+
+        getStringFromSdk(image, "deadline").ifPresent(deadlineStr -> {
+            try {
+                task.setDeadline(LocalDateTime.parse(deadlineStr, DateTimeFormatter.ISO_DATE_TIME));
+            } catch (Exception ignored) {}
+        });
+
+        getStringFromSdk(image, "completed_at").ifPresent(completedAtStr -> {
+            try {
+                task.setCompletedAt(LocalDateTime.parse(completedAtStr, DateTimeFormatter.ISO_DATE_TIME));
+            } catch (Exception ignored) {}
+        });
+        
+        getStringFromSdk(image, "expired_at").ifPresent(expiredAtStr -> {
+            try {
+                task.setExpiredAt(LocalDateTime.parse(expiredAtStr, DateTimeFormatter.ISO_DATE_TIME));
+            } catch (Exception ignored) {}
+        });
+
+        return Optional.of(task);
+    }
+    
+    /**
+     * Get a string value from AWS SDK v2 AttributeValue map
+     */
+    public static Optional<String> getStringFromSdk(Map<String, software.amazon.awssdk.services.dynamodb.model.AttributeValue> map, String key) {
+        if (map == null || !map.containsKey(key)) return Optional.empty();
+        software.amazon.awssdk.services.dynamodb.model.AttributeValue val = map.get(key);
+        return Optional.ofNullable(val.s()).filter(s -> !s.isEmpty());
+    }
+
     public static Optional<Map<String, software.amazon.awssdk.services.dynamodb.model.AttributeValue>> getTask(DynamoDbClient dynamoDbClient, String tableName, String taskId) {
         try {
             Map<String, software.amazon.awssdk.services.dynamodb.model.AttributeValue> key = new HashMap<>();

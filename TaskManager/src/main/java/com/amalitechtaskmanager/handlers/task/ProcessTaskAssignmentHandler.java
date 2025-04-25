@@ -3,6 +3,7 @@ package com.amalitechtaskmanager.handlers.task;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.amalitechtaskmanager.factories.ObjectMapperFactory;
 import com.amalitechtaskmanager.model.Task;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
@@ -15,35 +16,55 @@ import software.amazon.awssdk.services.sns.model.MessageAttributeValue;
 import software.amazon.awssdk.services.sns.model.PublishRequest;
 
 public class ProcessTaskAssignmentHandler implements RequestHandler<SQSEvent, Void> {
-    
+
     private final SnsClient snsClient = SnsClient.create();
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = ObjectMapperFactory.getMapper();
     private final String taskNotificationTopicArn = System.getenv("SNS_TOPIC_ARN");
-    
+    private final String taskNotificationTopicArnCopy = "arn:aws:sns:eu-central-1:443370714528:TaskAssignmentNotificationTopic";
+
+
+
     @Override
     public Void handleRequest(SQSEvent event, Context context) {
+        context.getLogger().log("sns topic arn  ::::::"+ taskNotificationTopicArn);
         for (SQSMessage message : event.getRecords()) {
             try {
                 Task taskAssignment = objectMapper.readValue(message.getBody(), Task.class);
-                String userId = taskAssignment.getUserId();
-                
-                if (userId != null && !userId.isEmpty()) {
-                    // Process task assignment in the system
-                    // Send notification to the FIFO topic with user_id as message attribute for filtering
+                String userEmail = taskAssignment.getUserId();
+
+                if (userEmail != null && !userEmail.isEmpty()) {
+                    // Add message attributes for filtering - MATCH EXACTLY WITH FILTER POLICY
                     Map<String, MessageAttributeValue> messageAttributes = new HashMap<>();
-                    messageAttributes.put("user_id", MessageAttributeValue.builder()
-                            .dataType("String")
-                            .stringValue(userId)
-                            .build());
-                    
-                    // Publish to the notification topic with filtering attributes
+
+                    // Use "user_id" to match the filter policy
+                    messageAttributes.put("recipient_email",
+                            MessageAttributeValue.builder()
+                                    .dataType("String")
+                                    .stringValue(userEmail)
+                                    .build());
+
+                    context.getLogger().log("recipient email " +userEmail);
+
+                    // Create a human-readable message for the notification
+                    String messageText = "New task assigned: " + taskAssignment.getName() +
+                            "\nDeadline: " + taskAssignment.getDeadline() +
+                            "\nDescription: " + taskAssignment.getDescription();
+
+
+                    context.getLogger().log("topic arn" + taskNotificationTopicArn);
+
+                    // Publish with message attributes
                     snsClient.publish(PublishRequest.builder()
-                            .topicArn(taskNotificationTopicArn)
-                            .message(objectMapper.writeValueAsString(taskAssignment))
+                            .topicArn(taskNotificationTopicArnCopy)
+                            .message(messageText)
+                            .subject("New Task Assignment: " + taskAssignment.getName())
                             .messageAttributes(messageAttributes)
-                            .messageGroupId(userId)
-                            .messageDeduplicationId(taskAssignment.getTaskId())
                             .build());
+
+
+                    context.getLogger().log("Publishing message with attributes: " + messageAttributes);
+                    context.getLogger().log("Message: " + messageText);
+                    context.getLogger().log("Published to SNS topic with user_id filter: " + userEmail);
                 } else {
                     context.getLogger().log("Skipping task with missing userId: " + taskAssignment.getTaskId());
                 }
@@ -52,6 +73,6 @@ public class ProcessTaskAssignmentHandler implements RequestHandler<SQSEvent, Vo
                 e.printStackTrace();
             }
         }
- return null;
+        return null;
     }
 }
