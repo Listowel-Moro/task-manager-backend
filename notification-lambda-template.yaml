@@ -103,7 +103,7 @@ Resources:
       Environment:
         Variables:
           USER_POOL_ID: !Ref UserPoolId
-          SNS_TOPIC_ARN: !Ref NotificationTopicArn
+          SNS_TOPIC_ARN: !Ref TaskDeadlineNotificationTopicArn
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref TasksTableName
@@ -121,7 +121,7 @@ Resources:
             - Effect: Allow
               Action:
                 - sns:Publish
-              Resource: !Ref NotificationTopicArn
+              Resource: !Ref TaskDeadlineNotificationTopicArn
 
   UpdateTaskScheduleLambda:
     Type: AWS::Serverless::Function
