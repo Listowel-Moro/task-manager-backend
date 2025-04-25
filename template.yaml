@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Task Management System Backend - Merged Template
+Description: Task Management System Backend - Complete Template
 
 Parameters:
   Environment:
@@ -27,7 +27,7 @@ Resources:
       UsernameAttributes:
         - email
       AdminCreateUserConfig:
-        AllowAdminCreateUserOnly: false
+        AllowAdminCreateUserOnly: false  # Changed to true for admin-only creation
         InviteMessageTemplate:
           EmailSubject: Welcome to Our Application
           EmailMessage: Your username is {username} and temporary password is {####}. Please login to reset your password.
@@ -127,7 +127,8 @@ Resources:
       AttributeDefinitions:
         - AttributeName: commentId
           AttributeType: S
-
+        - AttributeName: taskId
+          AttributeType: S
       KeySchema:
         - AttributeName: commentId
           KeyType: HASH
@@ -279,7 +280,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:*
-                Resource: !GetAtt CommentsTable.Arn
+                Resource:
+                  - !GetAtt TasksTable.Arn
+                  - !GetAtt CommentsTable.Arn
               - Effect: Allow
                 Action:
                   - sqs:SendMessage
@@ -962,6 +965,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: TaskManager/
+      FunctionName: !Sub TaskExpirationHandler-${Environment}
       Handler: com.amalitechtaskmanager.handlers.task.TaskExpirationHandler::handleRequest
       Runtime: java21
       MemorySize: 512
@@ -1171,6 +1175,7 @@ Resources:
       Runtime: java21
       MemorySize: 512
       Timeout: 30
+      Description: Lambda function to create deadline events from DynamoDB Streams
       Environment:
         Variables:
           SCHEDULER_ROLE_ARN: !GetAtt EventBridgeSchedulerRole.Arn
@@ -1210,19 +1215,9 @@ Resources:
             StartingPosition: LATEST
             BatchSize: 10
             Enabled: true
-#            FilterCriteria:
-#              Filters:
-#                - Pattern: |
-#                    {
-#                      "eventName": ["INSERT", "MODIFY"],
-#                      "dynamodb": {
-#                        "NewImage": {
-#                          "status": {
-#                            "S": ["CREATED"]
-#                          }
-#                        }
-#                      }
-#                    }
+            FilterCriteria:
+              Filters:
+                - Pattern: '{"dynamodb": {"NewImage": {"status": {"S": ["CREATED", "MODIFIED"]}}}}'
 
   ReminderProcessorLambda:
     Type: AWS::Serverless::Function
@@ -1236,10 +1231,11 @@ Resources:
       Environment:
         Variables:
           USER_POOL_ID: !Ref UserPool
-          SNS_TOPIC_ARN: !Ref TaskDeadlineNotificationTopic
+          SNS_TOPIC_ARN: !Ref EmailNotificationTopic
           ACCOUNT_ID: !Ref AWS::AccountId
           REGION: !Ref AWS::Region
           TABLE_NAME: !Ref TasksTable
+          TASK_DEADLINE_TOPIC_ARN: !Ref TaskDeadlineNotificationTopic
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref TasksTable
@@ -1257,7 +1253,7 @@ Resources:
             - Effect: Allow
               Action:
                 - sns:Publish
-              Resource: !Ref TaskDeadlineNotificationTopic
+              Resource: !Ref EmailNotificationTopic
 
   UpdateTaskScheduleLambda:
     Type: AWS::Serverless::Function
