@@ -885,6 +885,7 @@ Resources:
       Environment:
         Variables:
           TASKS_TABLE: !Ref TasksTable
+          TASK_CLOSED_TOPIC_ARN: !Ref ClosedTasksNotificationTopic
       Events:
         CloseTaskApi:
           Type: Api
@@ -907,6 +908,7 @@ Resources:
       Environment:
         Variables:
           TASKS_TABLE: !Ref TasksTable
+          TASK_ASSIGNMENT_TOPIC_ARN: !Ref TaskAssignmentNotificationTopic
       Events:
         ReAssignTaskApi:
           Type: Api
