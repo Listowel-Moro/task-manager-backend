@@ -8,6 +8,7 @@ import java.util.UUID;
 import com.amalitechtaskmanager.factories.ObjectMapperFactory;
 import com.amalitechtaskmanager.model.Task;
 import com.amalitechtaskmanager.model.TaskStatus;
+import com.amalitechtaskmanager.utils.SchedulerUtils;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
@@ -17,16 +18,25 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.awssdk.services.scheduler.SchedulerClient;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+
 public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     private final DynamoDbClient dynamoDbClient = DynamoDbClient.create();
     private final SqsClient sqsClient = SqsClient.create();
+    private final SchedulerClient schedulerClient = SchedulerClient.create();
+    private final SchedulerUtils schedulerUtils;
 //    private final ObjectMapper objectMapper = new ObjectMapper();
     private final ObjectMapper objectMapper = ObjectMapperFactory.getMapper();
-
     private final String tasksTable = System.getenv("TASKS_TABLE");
     private final String taskAssignmentQueue = System.getenv("TASK_ASSIGNMENT_QUEUE");
+    private final String taskExpirationLambdaArn = System.getenv("TASK_EXPIRATION_LAMBDA_ARN");
+    private final String schedulerRoleArn = System.getenv("SCHEDULER_ROLE_ARN");
+
+    public CreateTaskHandler() {
+        this.schedulerUtils = new SchedulerUtils(schedulerClient);
+    }
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
         try {
@@ -74,9 +84,26 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
                 throw e;
             }
             context.getLogger().log("Sending to FIFO queue with messageGroupId: task-assignments");
+            sqsClient.sendMessage(SendMessageRequest.builder()
+                    .queueUrl(taskAssignmentQueue)
+                    .messageBody(objectMapper.writeValueAsString(task))
+                    .messageGroupId("task-assignments")
+                    .build());
+
+            // Schedule task expiration at deadline
+            boolean scheduledExpiration = false;
+            if (taskExpirationLambdaArn != null && !taskExpirationLambdaArn.isEmpty() &&
+                schedulerRoleArn != null && !schedulerRoleArn.isEmpty()) {
+                scheduledExpiration = schedulerUtils.scheduleTaskExpiration(task, taskExpirationLambdaArn, schedulerRoleArn);
+                context.getLogger().log("Scheduled expiration for task " + task.getTaskId() + ": " + scheduledExpiration);
+            } else {
+                context.getLogger().log("Task expiration scheduling not configured");
+            }
+
             Map<String, String> responseBody = new HashMap<>();
             responseBody.put("taskId", task.getTaskId());
-            responseBody.put("message", "Task created and queued for assignment");
+            responseBody.put("message", "Task created and queued for assignment" +
+                    (scheduledExpiration ? ", expiration scheduled" : ""));
             return new APIGatewayProxyResponseEvent()
                     .withStatusCode(200)
                     .withBody(objectMapper.writeValueAsString(responseBody))

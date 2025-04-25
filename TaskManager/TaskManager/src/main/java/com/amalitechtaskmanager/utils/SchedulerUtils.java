@@ -35,13 +35,11 @@ public class SchedulerUtils {
         return Optional.ofNullable(attr.getS()).filter(s -> !s.isEmpty());
     }
 
-    public static Optional<OffsetDateTime> parseDeadline(String deadline) {
-        logger.info("Deadline string: {}", deadline);
+    public static Optional<OffsetDateTime> parseDeadline(String deadline, String taskId) {
         try {
-            LocalDateTime localDateTime = LocalDateTime.parse(deadline, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-            return Optional.of(localDateTime.atOffset(ZoneOffset.UTC)); // or any desired ZoneOffset
+            return Optional.of(OffsetDateTime.parse(deadline, DateTimeFormatter.ISO_OFFSET_DATE_TIME));
         } catch (DateTimeParseException e) {
-            logger.error("Invalid deadline format: {}", deadline);
+            logger.error("Invalid deadline format for taskId: {}: {}", taskId, deadline);
             return Optional.empty();
         }
     }
@@ -63,7 +61,6 @@ public class SchedulerUtils {
     public void createSchedule(String taskId, OffsetDateTime reminderTime,
                                Map<String, AttributeValue> taskItem,
                                String targetLambdaArn, String schedulerRoleArn) {
-        logger.info("Creating schedule for taskId: {} at {}", taskId, reminderTime);
         try {
             String scheduleExpression = "at(" + reminderTime.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + ")";
             Map<String, String> inputPayload = new HashMap<>();
@@ -75,7 +72,6 @@ public class SchedulerUtils {
                     .name("TaskReminder_" + taskId)
                     .scheduleExpression(scheduleExpression)
                     .state(ScheduleState.ENABLED)
-                    .description("Reminder for task " + taskId)
                     .flexibleTimeWindow(FlexibleTimeWindow.builder().mode("OFF").build())
                     .target(Target.builder()
                             .arn(targetLambdaArn)
@@ -83,7 +79,7 @@ public class SchedulerUtils {
                             .input(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(inputPayload))
                             .build())
                     .build();
-            logger.info("Creating schedule for taskId: {} with payload {}", taskId, request);
+
             schedulerClient.createSchedule(request);
             logger.info("Created new schedule for taskId: {} at {}", taskId, reminderTime);
         } catch (Exception e) {

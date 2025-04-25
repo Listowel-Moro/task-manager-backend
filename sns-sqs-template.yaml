@@ -101,7 +101,7 @@ Outputs:
 
   TaskAssignmentQueueArn:
     Description: SQS Task Assignment Queue ARN
-    Value: !GetAtt TaskAssignmentQueue.Arn
+    Value: !GetAtt TaskAssignmentQueue.QueueUrl
 
   TaskExpirationNotificationTopicArn:
     Description: SNS Task Expiration Notification Topic ARN

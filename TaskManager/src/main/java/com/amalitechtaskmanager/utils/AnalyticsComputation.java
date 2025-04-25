@@ -11,6 +11,7 @@ public class AnalyticsComputation {
 
         long completedTasks = 0;
         long inProgressTasks = 0;
+        long closedTasks = 0;
         long deadlinePassedTasks = 0;
         Instant now = Instant.now();
 
@@ -21,6 +22,8 @@ public class AnalyticsComputation {
             // Count by status
             if ("completed".equalsIgnoreCase(status)) {
                 completedTasks++;
+            } else if ("closed".equalsIgnoreCase(status)) {
+                closedTasks++;
             } else if ("open".equalsIgnoreCase(status)) {
                 inProgressTasks++;
             }
@@ -41,6 +44,7 @@ public class AnalyticsComputation {
         // Build analytics response
         analytics.put("totalTasks", tasks.size());
         analytics.put("completedTasks", completedTasks);
+        analytics.put("closedTasks", closedTasks);
         analytics.put("inProgressTasks", inProgressTasks);
         analytics.put("deadlinePassedTasks", deadlinePassedTasks);
 
