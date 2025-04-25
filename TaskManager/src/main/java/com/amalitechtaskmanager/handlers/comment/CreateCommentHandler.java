@@ -1,17 +1,20 @@
 package com.amalitechtaskmanager.handlers.comment;
 
-
-import com.amalitechtaskmanager.dto.CommentRequest;
+import com.amalitechtaskmanager.model.Comment;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -19,52 +22,52 @@ import java.util.UUID;
 public class CreateCommentHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
     private final DynamoDbClient dynamoDbClient;
-    private static final String TABLE_NAME = "Comment";
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final String TABLE_NAME = System.getenv("TABLE_NAME");
+    private final ObjectMapper objectMapper;
 
     public CreateCommentHandler() {
         this.dynamoDbClient = DynamoDbClient.create();
+        this.objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
-    // For testing with dependency injection
     public CreateCommentHandler(DynamoDbClient dynamoDbClient) {
         this.dynamoDbClient = dynamoDbClient;
+        this.objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
-        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
-
         try {
-            // Parse input
-            CommentRequest request = objectMapper.readValue(input.getBody(), CommentRequest.class);
+            Comment comment = objectMapper.readValue(input.getBody(), Comment.class);
 
-            if (request == null || request.userId == null || request.taskId == null ||
-                    request.content == null || request.timestamp == null) {
-                return createResponse(400, "Invalid input: All fields (userId, taskId, content, timestamp) are required");
+            if (comment.getUserId() == null || comment.getTaskId() == null || comment.getContent() == null) {
+                return createResponse(400, "Invalid input: userId, taskId, and content are required");
             }
 
-            // Generate unique commentId
             String commentId = UUID.randomUUID().toString();
+            LocalDateTime now = LocalDateTime.now();
 
-            // Prepare item to put in DynamoDB
+            comment.setCommentId(commentId);
+            comment.setCreatedAt(now);
+            comment.setUpdatedAt(now);
+
             Map<String, AttributeValue> item = new HashMap<>();
-            item.put("commentId", AttributeValue.builder().s(commentId).build());
-            item.put("userId", AttributeValue.builder().s(request.userId).build());
-            item.put("taskId", AttributeValue.builder().s(request.taskId).build());
-            item.put("content", AttributeValue.builder().s(request.content).build());
-            item.put("timestamp", AttributeValue.builder().s(request.timestamp).build());
+            item.put("commentId", AttributeValue.builder().s(comment.getCommentId()).build());
+            item.put("userId", AttributeValue.builder().s(comment.getUserId()).build());
+            item.put("taskId", AttributeValue.builder().s(comment.getTaskId()).build());
+            item.put("content", AttributeValue.builder().s(comment.getContent()).build());
+            item.put("createdAt", AttributeValue.builder().s(comment.getCreatedAt().toString()).build());
+            item.put("updatedAt", AttributeValue.builder().s(comment.getUpdatedAt().toString()).build());
 
-            // Create PutItem request
-            PutItemRequest putItemRequest = PutItemRequest.builder()
+            dynamoDbClient.putItem(PutItemRequest.builder()
                     .tableName(TABLE_NAME)
                     .item(item)
-                    .build();
+                    .build());
 
-            // Put item in DynamoDB
-            dynamoDbClient.putItem(putItemRequest);
-
-            // Prepare success response
             Map<String, String> responseBody = new HashMap<>();
             responseBody.put("commentId", commentId);
             responseBody.put("message", "Comment created successfully");
@@ -93,6 +96,4 @@ public class CreateCommentHandler implements RequestHandler<APIGatewayProxyReque
 
         return response;
     }
-
-
 }

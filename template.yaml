@@ -120,13 +120,10 @@ Resources:
       AttributeDefinitions:
         - AttributeName: commentId
           AttributeType: S
-        - AttributeName: taskId
-          AttributeType: S
+
       KeySchema:
         - AttributeName: commentId
           KeyType: HASH
-        - AttributeName: taskId
-          KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
       Tags:
         - Key: Component
@@ -246,6 +243,10 @@ Resources:
                 Action:
                   - dynamodb:*
                 Resource: !GetAtt TasksTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:*
+                Resource: !GetAtt CommentsTable.Arn
               - Effect: Allow
                 Action:
                   - sqs:SendMessage
@@ -978,8 +979,12 @@ Resources:
         Variables:
           TABLE_NAME: Comments
       Policies:
-        - DynamoDBWritePolicy:
-            TableName: Comments
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:DeleteItem
+              Resource: !GetAtt CommentsTable.Arn
       Events:
         DeleteCommentApi:
           Type: Api
@@ -988,7 +993,8 @@ Resources:
             Path: /comments
             Method: DELETE
 
-  #============================================================================
+
+    #============================================================================
   # Lambda Functions - Notifications
   #============================================================================
   CreateDeadlineEventLambda:
