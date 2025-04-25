@@ -337,7 +337,7 @@ public class TaskExpirationHandler implements RequestHandler<ScheduledEvent, Voi
                 context.getLogger().log("Sent expiration notification to user: " + task.getUserId());
 
                 // Send notification to admin
-                SnsUtils.sendAdminExpirationNotification(snsClient, taskExpirationNotificationTopicArn, task);
+                SnsUtils.sendAdminExpirationNotification(snsClient, taskExpirationNotificationTopicArn, task, ADMIN_EMAIL);
                 context.getLogger().log("Sent expiration notification to admin for task: " + task.getTaskId());
             } else {
                 context.getLogger().log("Notification topic not configured");
