@@ -27,7 +27,6 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
     private final SqsClient sqsClient = SqsClient.create();
     private final SchedulerClient schedulerClient = SchedulerClient.create();
     private final SchedulerUtils schedulerUtils;
-//    private final ObjectMapper objectMapper = new ObjectMapper();
     private final ObjectMapper objectMapper = ObjectMapperFactory.getMapper();
     private final String tasksTable = System.getenv("TASKS_TABLE");
     private final String taskAssignmentQueue = System.getenv("TASK_ASSIGNMENT_QUEUE");

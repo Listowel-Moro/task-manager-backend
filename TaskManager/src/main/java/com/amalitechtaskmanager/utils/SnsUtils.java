@@ -65,7 +65,7 @@ public class SnsUtils {
      * @param topicArn The topic ARN to publish to
      * @param task The expired task
      */
-    public static void sendAdminExpirationNotification(SnsClient snsClient, String topicArn, Task task) {
+    public static void sendAdminExpirationNotification(SnsClient snsClient, String topicArn, Task task, String email) {
         try {
             String message = String.format("Admin Alert: Task '%s' (ID: %s) assigned to user %s has expired. The deadline was %s.", 
                     task.getName(), task.getTaskId(), task.getUserId(), task.getDeadline());
@@ -73,7 +73,7 @@ public class SnsUtils {
             Map<String, MessageAttributeValue> messageAttributes = new HashMap<>();
             messageAttributes.put("for_admin", MessageAttributeValue.builder()
                     .dataType("String")
-                    .stringValue("true")
+                    .stringValue(email)
                     .build());
             
             PublishRequest request = PublishRequest.builder()
