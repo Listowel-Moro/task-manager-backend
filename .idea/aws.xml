@@ -6,12 +6,17 @@
     <option name="recentlyUsedProfiles">
       <list>
         <option value="profile:default" />
+        <option value="profile:dev-profile" />
       </list>
     </option>
     <option name="recentlyUsedRegions">
       <list>
         <option value="eu-central-1" />
+        <option value="eu-west-1" />
       </list>
     </option>
+  </component>
+  <component name="explorerToolWindow">
+    <option name="selectedTab" value="Amazon Q" />
   </component>
 </project>

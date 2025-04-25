@@ -1,19 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Task Management System Backend - Main Template
+Description: Task Management System - Parent Stack
 
 Resources:
-  CognitoStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: cognito-template.yaml
-      Parameters:
-        TeamMemberSubscriptionStepFunctionArn: !GetAtt StepFunctionsStack.Outputs.TeamMemberSubscriptionStepFunctionArn
-        TaskAssignmentNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentNotificationTopicArn
-      Tags:
-        - Key: Component
-          Value: Cognito
-
   SnsSqsStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -24,6 +13,7 @@ Resources:
 
   StepFunctionsStack:
     Type: AWS::CloudFormation::Stack
+    DependsOn: SnsSqsStack
     Properties:
       TemplateURL: step-functions-template.yaml
       Parameters:
@@ -33,6 +23,20 @@ Resources:
       Tags:
         - Key: Component
           Value: StepFunctions
+
+  CognitoStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - SnsSqsStack
+      - StepFunctionsStack
+    Properties:
+      TemplateURL: cognito-template.yaml
+      Parameters:
+        TeamMemberSubscriptionStepFunctionArn: !GetAtt StepFunctionsStack.Outputs.TeamMemberSubscriptionStepFunctionArn
+        TaskAssignmentNotificationTopicArn: !GetAtt SnsSqsStack.Outputs.TaskAssignmentNotificationTopicArn
+      Tags:
+        - Key: Component
+          Value: Cognito
 
   LambdaFunctionsStack:
     Type: AWS::CloudFormation::Stack
@@ -66,6 +70,7 @@ Resources:
       Tags:
         - Key: Component
           Value: Events
+
   NotificationStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -84,11 +89,17 @@ Resources:
       Tags:
         - Key: Component
           Value: Notification
+
 Outputs:
   ApiUrlCognito:
     Description: API Gateway endpoint URL
     Value: !GetAtt CognitoStack.Outputs.ApiUrl
-
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !GetAtt CognitoStack.Outputs.UserPoolId
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !GetAtt CognitoStack.Outputs.UserPoolClientId
   EventBridgeSchedulerRoleArn:
     Description: EventBridge Scheduler Role ARN
     Value: !GetAtt EventStack.Outputs.EventBridgeSchedulerRoleArn
