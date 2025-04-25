@@ -3,3 +3,5 @@
 /.idea/workspace.xml
 target/
 .aws-sam/
+.idea/
+samconfig.toml
