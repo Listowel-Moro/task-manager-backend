@@ -85,8 +85,24 @@ public class ReminderProcessorLambda implements RequestHandler<ScheduledEvent, N
             logger.error("No email found for userId: {}", userId);
             return new NotificationResponse(false, "No email found for assigneeId: " + userId);
         }
-        String message = String.format("Reminder: Task '%s' (ID: %s) is due at %s.", title, taskId, deadline);
-        String subject = "Task Reminder";
+        String message = String.format(
+                "Heading: Task Deadline Reminder\n" +
+                        "Task ID: %s\n" +
+                        "Task Title: %s\n" +
+                        "Assigned To: %s\n" +
+                        "Due Date: %s\n" +
+                        "Priority: %s\n\n" +
+                        "Reminder: The task '%s' assigned to you is due soon. Please ensure all deliverables are completed on time.",
+                taskId,
+                taskOpt.get().get("name").s(),
+                taskOpt.get().get("userId").s(),
+                taskOpt.get().get("deadline").s(),
+                "High",
+                taskOpt.get().get("name").s()
+        );
+
+
+        String subject = "Task Deadline Reminder";
         SnsUtils.sendEmailNotification(SNS_TOPIC_ARN, emailOpt.get(), subject, message);
         return new NotificationResponse(true, "Notification sent successfully.");
     }

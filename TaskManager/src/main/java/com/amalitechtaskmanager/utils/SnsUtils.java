@@ -36,6 +36,7 @@ public class SnsUtils {
 
     public static void sendEmailNotification(String topicArn, String email, String subject, String message) {
         try {
+
             Map<String, MessageAttributeValue> messageAttributes = new HashMap<>();
 
             // Use "user_id" to match the filter policy
@@ -44,7 +45,7 @@ public class SnsUtils {
                             .dataType("String")
                             .stringValue(email)
                             .build());
-
+            logger.info("messageAttributes" + messageAttributes);
             // Publish with message attributes
             SNSFactory.getSnsClient().publish(PublishRequest.builder()
                     .topicArn(topicArn)
@@ -52,7 +53,7 @@ public class SnsUtils {
                     .subject(subject)
                     .messageAttributes(messageAttributes)
                     .build());
-
+            logger.info("Notification sent to {} for taskId: {}", email, message);
         } catch (Exception e) {
             logger.error("Failed to send notification: {}", e.getMessage());
         }

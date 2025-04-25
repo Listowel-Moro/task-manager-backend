@@ -1040,9 +1040,19 @@ Resources:
             StartingPosition: LATEST
             BatchSize: 10
             Enabled: true
-            FilterCriteria:
-              Filters:
-                - Pattern: '{"dynamodb": {"NewImage": {"status": {"S": ["CREATED", "MODIFIED"]}}}}'
+#            FilterCriteria:
+#              Filters:
+#                - Pattern: |
+#                    {
+#                      "eventName": ["INSERT", "MODIFY"],
+#                      "dynamodb": {
+#                        "NewImage": {
+#                          "status": {
+#                            "S": ["CREATED"]
+#                          }
+#                        }
+#                      }
+#                    }
 
   ReminderProcessorLambda:
     Type: AWS::Serverless::Function
@@ -1056,11 +1066,10 @@ Resources:
       Environment:
         Variables:
           USER_POOL_ID: !Ref UserPool
-          SNS_TOPIC_ARN: !Ref EmailNotificationTopic
+          SNS_TOPIC_ARN: !Ref TaskDeadlineNotificationTopic
           ACCOUNT_ID: !Ref AWS::AccountId
           REGION: !Ref AWS::Region
           TABLE_NAME: !Ref TasksTable
-          TASK_DEADLINE_TOPIC_ARN: !Ref TaskDeadlineNotificationTopic
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref TasksTable
@@ -1078,7 +1087,7 @@ Resources:
             - Effect: Allow
               Action:
                 - sns:Publish
-              Resource: !Ref EmailNotificationTopic
+              Resource: !Ref TaskDeadlineNotificationTopic
 
   UpdateTaskScheduleLambda:
     Type: AWS::Serverless::Function
