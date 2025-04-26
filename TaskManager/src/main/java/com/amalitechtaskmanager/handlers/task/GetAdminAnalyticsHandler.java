@@ -81,6 +81,8 @@ public class GetAdminAnalyticsHandler implements RequestHandler<APIGatewayProxyR
                     .ifPresent(value -> result.put(entry.getKey(), value));
         }
         return result;
+
+
     }
 
     private Instant calculateCutoffTime(String timeRange) {

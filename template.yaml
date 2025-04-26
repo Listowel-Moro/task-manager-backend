@@ -1250,7 +1250,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /comments
+            Path: /comments/post
             Method: POST
 
   DeleteCommentFunction:
@@ -1276,7 +1276,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /comments
+            Path: /comments/delete/{id}
             Method: DELETE
 
 
