@@ -3,8 +3,11 @@ package com.amalitechtaskmanager.handlers.task;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import com.amalitechtaskmanager.model.Task;
 import com.amalitechtaskmanager.model.TaskStatus;
@@ -27,23 +30,26 @@ import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
 import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 import software.amazon.awssdk.services.sns.SnsClient;
+import software.amazon.awssdk.services.sns.model.ListSubscriptionsByTopicRequest;
+import software.amazon.awssdk.services.sns.model.ListSubscriptionsByTopicResponse;
 import software.amazon.awssdk.services.sns.model.MessageAttributeValue;
 import software.amazon.awssdk.services.sns.model.PublishRequest;
+import software.amazon.awssdk.services.sns.model.Subscription;
+import software.amazon.awssdk.services.sns.model.SubscribeRequest;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminGetUserRequest;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminGetUserResponse;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AttributeType;
-import software.amazon.awssdk.services.sns.model.SubscribeRequest;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.ListUsersInGroupRequest;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.ListUsersInGroupResponse;
 
 /**
  * Lambda function that checks for expired tasks and updates their status.
  * This function is triggered by a scheduled EventBridge rule.
  */
 public class TaskExpirationHandler implements RequestHandler<ScheduledEvent, Void> {
-
-    private static final String ADMIN_EMAIL = "biyip95648@mongrec.com"; // Hardcoded admin email
 
     private final DynamoDbClient dynamoDbClient;
     private final SnsClient snsClient;
@@ -259,12 +265,94 @@ public class TaskExpirationHandler implements RequestHandler<ScheduledEvent, Voi
     }
 
     /**
+     * Fetch admin emails from Cognito user pool
+     */
+    private List<String> getAdminEmails(Context context) {
+        try {
+            ListUsersInGroupRequest listUsersInGroupRequest = ListUsersInGroupRequest.builder()
+                    .userPoolId(userPoolId)
+                    .groupName("admin")
+                    .build();
+
+            ListUsersInGroupResponse response = cognitoClient.listUsersInGroup(listUsersInGroupRequest);
+
+            List<String> emails = response.users().stream()
+                    .map(user -> user.attributes().stream()
+                            .filter(attr -> attr.name().equals("email"))
+                            .findFirst()
+                            .map(AttributeType::value)
+                            .orElse(null))
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+
+            context.getLogger().log("Found " + emails.size() + " admin emails from Cognito");
+            return emails;
+        } catch (Exception e) {
+            context.getLogger().log("Error fetching admin emails: " + e.getMessage());
+            return List.of(); // Return empty list on error
+        }
+    }
+
+    /**
+     * Check if an email is already subscribed to the SNS topic
+     */
+    private boolean isEmailSubscribed(String email, Context context) {
+        try {
+            ListSubscriptionsByTopicRequest request = ListSubscriptionsByTopicRequest.builder()
+                    .topicArn(taskExpirationNotificationTopicArn)
+                    .build();
+
+            ListSubscriptionsByTopicResponse response = snsClient.listSubscriptionsByTopic(request);
+
+            for (Subscription subscription : response.subscriptions()) {
+                if ("email".equals(subscription.protocol()) && email.equals(subscription.endpoint())) {
+                    context.getLogger().log("Email " + email + " is already subscribed to topic");
+                    return true;
+                }
+            }
+
+            context.getLogger().log("Email " + email + " is not yet subscribed to topic");
+            return false;
+        } catch (Exception e) {
+            context.getLogger().log("Error checking subscription status: " + e.getMessage());
+            return false; // Assume not subscribed on error
+        }
+    }
+
+    /**
+     * Subscribe an email to the SNS topic if not already subscribed
+     */
+    private void subscribeEmailIfNeeded(String email, Context context) {
+        if (email == null || email.isEmpty()) {
+            return;
+        }
+
+        try {
+            if (!isEmailSubscribed(email, context)) {
+                context.getLogger().log("Subscribing email " + email + " to topic");
+                SubscribeRequest subscribeRequest = SubscribeRequest.builder()
+                        .protocol("email")
+                        .endpoint(email)
+                        .topicArn(taskExpirationNotificationTopicArn)
+                        .returnSubscriptionArn(true)
+                        .build();
+
+                snsClient.subscribe(subscribeRequest);
+                context.getLogger().log("Successfully subscribed " + email + " to topic");
+            }
+        } catch (Exception e) {
+            context.getLogger().log("Error subscribing email " + email + ": " + e.getMessage());
+        }
+    }
+
+    /**
      * Process notifications for an expired task
      */
     private void processNotifications(Task task, Context context) {
         try {
             if (taskExpirationNotificationTopicArn != null) {
-                // Get user email from Cognito and subscribe to the topic
+                // Get user email from Cognito
+                String userEmail = null;
                 if (task.getUserId() != null && !task.getUserId().isEmpty() && userPoolId != null && !userPoolId.isEmpty()) {
                     try {
                         // Get user from Cognito
@@ -276,7 +364,6 @@ public class TaskExpirationHandler implements RequestHandler<ScheduledEvent, Voi
                         AdminGetUserResponse userResponse = cognitoClient.adminGetUser(userRequest);
 
                         // Find user email
-                        String userEmail = null;
                         for (AttributeType attribute : userResponse.userAttributes()) {
                             if ("email".equals(attribute.name())) {
                                 userEmail = attribute.value();
@@ -285,60 +372,59 @@ public class TaskExpirationHandler implements RequestHandler<ScheduledEvent, Voi
                         }
 
                         if (userEmail != null && !userEmail.isEmpty()) {
-                            // Subscribe user email to the topic
-                            context.getLogger().log("Subscribing user email " + userEmail + " to topic");
-                            SubscribeRequest subscribeRequest = SubscribeRequest.builder()
-                                    .protocol("email")
-                                    .endpoint(userEmail)
-                                    .topicArn(taskExpirationNotificationTopicArn)
-                                    .returnSubscriptionArn(true)
-                                    .build();
-
-                            snsClient.subscribe(subscribeRequest);
+                            // Subscribe user email to the topic if not already subscribed
+                            subscribeEmailIfNeeded(userEmail, context);
                         }
                     } catch (Exception e) {
-                        context.getLogger().log("Error subscribing user email: " + e.getMessage());
+                        context.getLogger().log("Error fetching user email: " + e.getMessage());
                     }
                 }
 
-                // Subscribe hardcoded admin email to the topic
-                try {
-                    context.getLogger().log("Subscribing admin email " + ADMIN_EMAIL + " to topic");
-                    SubscribeRequest subscribeRequest = SubscribeRequest.builder()
-                            .protocol("email")
-                            .endpoint(ADMIN_EMAIL)
-                            .topicArn(taskExpirationNotificationTopicArn)
-                            .returnSubscriptionArn(true)
-                            .build();
+                // Get admin emails from Cognito user pool
+                List<String> adminEmails = getAdminEmails(context);
 
-                    snsClient.subscribe(subscribeRequest);
-                } catch (Exception e) {
-                    context.getLogger().log("Error subscribing admin email: " + e.getMessage());
+                // Subscribe admin emails to the topic if not already subscribed
+                for (String adminEmail : adminEmails) {
+                    subscribeEmailIfNeeded(adminEmail, context);
                 }
 
                 // Send notification to the user
-                Map<String, MessageAttributeValue> userAttributes = new HashMap<>();
-                userAttributes.put("user_id", MessageAttributeValue.builder()
-                        .dataType("String")
-                        .stringValue(task.getUserId())
-                        .build());
+                if (userEmail != null && !userEmail.isEmpty()) {
+                    Map<String, MessageAttributeValue> userAttributes = new HashMap<>();
+                    userAttributes.put("user_id", MessageAttributeValue.builder()
+                            .dataType("String")
+                            .stringValue(task.getUserId())
+                            .build());
 
-                String userMessage = String.format("EXPIRED: Task '%s' (ID: %s) has expired. The deadline was %s.",
-                        task.getName(), task.getTaskId(), task.getDeadline());
+                    // Filter to ensure only the user receives this notification
+                    userAttributes.put("email", MessageAttributeValue.builder()
+                            .dataType("String")
+                            .stringValue(userEmail)
+                            .build());
 
-                PublishRequest userRequest = PublishRequest.builder()
-                        .message(userMessage)
-                        .subject("Task Expired: " + task.getName())
-                        .topicArn(taskExpirationNotificationTopicArn)
-                        .messageAttributes(userAttributes)
-                        .build();
+                    String userMessage = String.format("EXPIRED: Task '%s' (ID: %s) has expired. The deadline was %s.",
+                            task.getName(), task.getTaskId(), task.getDeadline());
 
-                snsClient.publish(userRequest);
-                context.getLogger().log("Sent expiration notification to user: " + task.getUserId());
+                    PublishRequest userRequest = PublishRequest.builder()
+                            .message(userMessage)
+                            .subject("Task Expired: " + task.getName())
+                            .topicArn(taskExpirationNotificationTopicArn)
+                            .messageAttributes(userAttributes)
+                            .build();
 
-                // Send notification to admin
-                SnsUtils.sendAdminExpirationNotification(snsClient, taskExpirationNotificationTopicArn, task, ADMIN_EMAIL);
-                context.getLogger().log("Sent expiration notification to admin for task: " + task.getTaskId());
+                    snsClient.publish(userRequest);
+                    context.getLogger().log("Sent expiration notification to user: " + task.getUserId());
+                }
+
+                // Send notification to admins
+                if (!adminEmails.isEmpty()) {
+                    for (String adminEmail : adminEmails) {
+                        SnsUtils.sendAdminExpirationNotification(snsClient, taskExpirationNotificationTopicArn, task, adminEmail);
+                    }
+                    context.getLogger().log("Sent expiration notification to " + adminEmails.size() + " admins for task: " + task.getTaskId());
+                } else {
+                    context.getLogger().log("No admin emails found to send notifications to");
+                }
             } else {
                 context.getLogger().log("Notification topic not configured");
             }

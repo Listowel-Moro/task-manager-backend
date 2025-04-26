@@ -123,11 +123,9 @@ Resources:
   CommentsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: Comments
+      TableName: Comment
       AttributeDefinitions:
         - AttributeName: commentId
-          AttributeType: S
-        - AttributeName: taskId
           AttributeType: S
       KeySchema:
         - AttributeName: commentId
