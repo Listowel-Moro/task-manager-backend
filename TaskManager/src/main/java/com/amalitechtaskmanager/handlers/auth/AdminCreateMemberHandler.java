@@ -18,6 +18,8 @@ import java.util.logging.Logger;
 import java.util.Base64;
 import com.fasterxml.jackson.core.type.TypeReference;
 
+import static com.amalitechtaskmanager.utils.CheckUserRoleUtil.isUserInAdminGroup;
+
 public class AdminCreateMemberHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     private final CognitoIdentityProviderClient cognitoClient;
     private final SnsClient snsClient;
@@ -90,10 +92,10 @@ public class AdminCreateMemberHandler implements RequestHandler<APIGatewayProxyR
                 return createErrorResponse(response, 400, "Bad request - Missing request body");
             }
 
-            Map<String, Object> requestBody = objectMapper.readValue(input.getBody(), Map.class);
-            String email = (String) requestBody.get("email");
-            String name = (String) requestBody.get("name");
-            String department = (String) requestBody.get("department");
+            Map<String, String> requestBody = objectMapper.readValue(input.getBody(), Map.class);
+            String email = requestBody.get("email");
+            String name =  requestBody.get("name");
+            String department = requestBody.get("department");
 
             if (email == null || name == null) {
                 return createErrorResponse(response, 400, "Missing required parameters: email and name");
@@ -176,72 +178,7 @@ public class AdminCreateMemberHandler implements RequestHandler<APIGatewayProxyR
         return response;
     }
 
-    private boolean isUserInAdminGroup(String idToken) {
-        try {
-            // Validate token format
-            if (idToken == null || idToken.isEmpty()) {
-                logger.warning("ID token is null or empty");
-                return false;
-            }
 
-            // Split JWT into parts
-            String[] parts = idToken.split("\\.");
-            if (parts.length != 3) {
-                logger.warning("Invalid JWT token format: Expected 3 parts, got " + parts.length);
-                return false;
-            }
-
-            // Decode the payload
-            String encodedPayload = parts[1];
-            // Add padding if needed
-            while (encodedPayload.length() % 4 != 0) {
-                encodedPayload += "=";
-            }
-
-            String payload;
-            try {
-                payload = new String(Base64.getUrlDecoder().decode(encodedPayload));
-                logger.info("Decoded JWT payload: " + payload);
-            } catch (IllegalArgumentException e) {
-                logger.severe("Failed to decode JWT payload with URL-safe Base64: " + e.getMessage());
-                return false;
-            }
-
-            // Parse the payload as JSON
-            Map<String, Object> claims = objectMapper.readValue(payload, new TypeReference<Map<String, Object>>() {});
-            logger.info("Parsed token claims: " + claims);
-
-            // Check for cognito:groups claim
-            if (!claims.containsKey("cognito:groups")) {
-                logger.warning("No cognito:groups claim found in the ID token");
-                return false;
-            }
-
-            // Get groups as a List
-            Object groupsObj = claims.get("cognito:groups");
-            if (!(groupsObj instanceof List)) {
-                logger.warning("cognito:groups claim is not a list: " + groupsObj);
-                return false;
-            }
-
-            @SuppressWarnings("unchecked")
-            List<String> groups = (List<String>) groupsObj;
-            if (groups == null || groups.isEmpty()) {
-                logger.warning("cognito:groups claim is empty");
-                return false;
-            }
-
-            // Check if "Admins" group is present (case-sensitive)
-            boolean isAdmin = groups.contains("Admins");
-            logger.info("User groups: " + groups + ", isAdmin: " + isAdmin);
-
-            return isAdmin;
-        } catch (Exception e) {
-            logger.severe("Error parsing ID token: " + e.getMessage());
-            e.printStackTrace();
-            return false;
-        }
-    }
 
     private String generateSecurePassword() {
         // Generate a secure random password that meets Cognito requirements

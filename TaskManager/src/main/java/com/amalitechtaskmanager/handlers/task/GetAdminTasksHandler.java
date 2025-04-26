@@ -3,6 +3,9 @@ package com.amalitechtaskmanager.handlers.task;
 import com.amalitechtaskmanager.factories.DynamoDbFactory;
 import com.amalitechtaskmanager.factories.ObjectMapperFactory;
 import com.amalitechtaskmanager.utils.ApiResponseUtil;
+import com.amalitechtaskmanager.utils.AuthorizerUtil;
+import com.amalitechtaskmanager.utils.DynamoFilterUtil;
+import com.amalitechtaskmanager.utils.DynamoDbUtils;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
@@ -19,7 +22,9 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.amalitechtaskmanager.constants.StringConstants.TABLE_NAME;
+import static com.amalitechtaskmanager.utils.ApiResponseUtil.createResponse;
 import static com.amalitechtaskmanager.utils.AttributeValueConverter.attributeValueToSimpleValue;
+import static com.amalitechtaskmanager.utils.CheckUserRoleUtil.isUserInAdminGroup;
 
 public class GetAdminTasksHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     private static final Logger logger = LoggerFactory.getLogger(GetAdminTasksHandler.class);
@@ -28,6 +33,19 @@ public class GetAdminTasksHandler implements RequestHandler<APIGatewayProxyReque
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent request, Context context) {
+
+        String idToken = request.getHeaders().get("Authorization");
+
+
+        if (idToken == null) {
+            return createResponse(401, "Unauthorized-Missing Header");
+        }
+
+        if (!AuthorizerUtil.authorize(idToken)){
+            return createResponse(403, "not authorized to perform this operation");
+        }
+
+
         logger.info("Processing request to get all admin tasks");
 
         try {
@@ -68,7 +86,7 @@ public class GetAdminTasksHandler implements RequestHandler<APIGatewayProxyReque
         StringBuilder filterExpression = new StringBuilder();
         Map<String, String> expressionAttributeNames = new HashMap<>();
         Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
-        
+
         int conditionCount = 0;
 
         for (Map.Entry<String, String> entry : queryParams.entrySet()) {
@@ -83,7 +101,7 @@ public class GetAdminTasksHandler implements RequestHandler<APIGatewayProxyReque
             if (attributeName.equals("status")) {
                 String nameAlias = "#s";
                 String valueAlias = ":s";
-                
+
                 filterExpression.append(nameAlias).append(" = ").append(valueAlias);
                 expressionAttributeNames.put(nameAlias, "status");
                 expressionAttributeValues.put(valueAlias, AttributeValue.builder().s(attributeValue).build());
@@ -91,7 +109,7 @@ public class GetAdminTasksHandler implements RequestHandler<APIGatewayProxyReque
                 // Handle other attributes
                 String nameAlias = "#" + attributeName;
                 String valueAlias = ":" + attributeName;
-                
+
                 filterExpression.append(nameAlias).append(" = ").append(valueAlias);
                 expressionAttributeNames.put(nameAlias, attributeName);
                 expressionAttributeValues.put(valueAlias, AttributeValue.builder().s(attributeValue).build());
