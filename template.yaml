@@ -738,6 +738,36 @@ Resources:
             Auth:
               Authorizer: CognitoAuthorizer
 
+  GetAllMembersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetAllMembersFunction
+      CodeUri: TaskManager/
+      Handler: com.amalitechtaskmanager.handlers.member.GetAllMembersHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:ListUsers
+              Resource: !GetAtt UserPool.Arn
+      Events:
+        GetAllMembers:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /members
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+
   #============================================================================
   # Lambda Functions - Task Management
   #============================================================================
