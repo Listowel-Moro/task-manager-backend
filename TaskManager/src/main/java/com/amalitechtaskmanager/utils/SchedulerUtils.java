@@ -1,5 +1,6 @@
 package com.amalitechtaskmanager.utils;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.scheduler.SchedulerClient;
@@ -66,10 +67,23 @@ public class SchedulerUtils {
         logger.info("Creating schedule for taskId: {} at {}", taskId, reminderTime);
         try {
             String scheduleExpression = "at(" + reminderTime.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + ")";
+
+
             Map<String, String> inputPayload = new HashMap<>();
             taskItem.forEach((key, value) ->
                     getAttributeValue(value).ifPresent(val -> inputPayload.put(key, val))
             );
+
+
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("detail-type", "TaskReminder");
+            payload.put("source", "task-manager");
+            payload.put("detail", inputPayload);
+
+
+            String payloadJson = new ObjectMapper().writeValueAsString(payload);
+            logger.info("Payload: {}", payloadJson);
+
 
             CreateScheduleRequest request = CreateScheduleRequest.builder()
                     .name("TaskReminder_" + taskId)
@@ -80,7 +94,7 @@ public class SchedulerUtils {
                     .target(Target.builder()
                             .arn(targetLambdaArn)
                             .roleArn(schedulerRoleArn)
-                            .input(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(inputPayload))
+                            .input(payloadJson)
                             .build())
                     .build();
             logger.info("Creating schedule for taskId: {} with payload {}", taskId, request);

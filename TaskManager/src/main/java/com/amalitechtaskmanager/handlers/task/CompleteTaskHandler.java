@@ -1,6 +1,7 @@
 package com.amalitechtaskmanager.handlers.task;
 
 import com.amalitechtaskmanager.model.TaskStatus;
+import com.amalitechtaskmanager.utils.AuthorizerUtil;
 import com.amalitechtaskmanager.utils.TaskUtils;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
@@ -17,6 +18,20 @@ public class CompleteTaskHandler implements RequestHandler<APIGatewayProxyReques
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent event, Context context) {
+
+
+        String idToken = event.getHeaders().get("Authorization");
+
+        if (idToken == null) {
+            return createResponse(401, "Unauthorized-Missing Header");
+        }
+
+        if (!AuthorizerUtil.authorize(idToken)){
+            return createResponse(401, "not authorized to perform this operation");
+        }
+
+
+
         try {
             String taskId = event.getPathParameters().get("taskId");
             if (taskId == null) {
