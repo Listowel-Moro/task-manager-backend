@@ -9,7 +9,12 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.*;
 
+import javax.print.DocFlavor;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 import static com.amalitechtaskmanager.utils.CheckUserRoleUtil.isUserInAdminGroup;
 import static com.amalitechtaskmanager.utils.ApiResponseUtil.createResponse;
@@ -58,7 +63,6 @@ public class AdminListAllMembers implements RequestHandler<APIGatewayProxyReques
                 var result = objectMapper.writeValueAsString(response);
                 return new APIGatewayProxyResponseEvent().withStatusCode(200)
                         .withBody(result);
-
 
 
 
