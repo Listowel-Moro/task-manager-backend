@@ -92,10 +92,10 @@ public class AdminCreateMemberHandler implements RequestHandler<APIGatewayProxyR
                 return createErrorResponse(response, 400, "Bad request - Missing request body");
             }
 
-            Map<String, Object> requestBody = objectMapper.readValue(input.getBody(), Map.class);
-            String email = (String) requestBody.get("email");
-            String name = (String) requestBody.get("name");
-            String department = (String) requestBody.get("department");
+            Map<String, String> requestBody = objectMapper.readValue(input.getBody(), Map.class);
+            String email = requestBody.get("email");
+            String name =  requestBody.get("name");
+            String department = requestBody.get("department");
 
             if (email == null || name == null) {
                 return createErrorResponse(response, 400, "Missing required parameters: email and name");
