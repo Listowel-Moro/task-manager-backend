@@ -53,16 +53,10 @@ public class DynamoDbUtils {
                 task.setCompletedAt(LocalDateTime.parse(completedAtStr, DateTimeFormatter.ISO_DATE_TIME));
             } catch (Exception ignored) {}
         });
-        
-        getSafeString(image, "expired_at").ifPresent(expiredAtStr -> {
-            try {
-                task.setExpiredAt(LocalDateTime.parse(expiredAtStr, DateTimeFormatter.ISO_DATE_TIME));
-            } catch (Exception ignored) {}
-        });
 
         return Optional.of(task);
     }
-    
+
     /**
      * Parse a task from AWS SDK v2 AttributeValue map
      */
@@ -97,16 +91,10 @@ public class DynamoDbUtils {
                 task.setCompletedAt(LocalDateTime.parse(completedAtStr, DateTimeFormatter.ISO_DATE_TIME));
             } catch (Exception ignored) {}
         });
-        
-        getStringFromSdk(image, "expired_at").ifPresent(expiredAtStr -> {
-            try {
-                task.setExpiredAt(LocalDateTime.parse(expiredAtStr, DateTimeFormatter.ISO_DATE_TIME));
-            } catch (Exception ignored) {}
-        });
 
         return Optional.of(task);
     }
-    
+
     /**
      * Get a string value from AWS SDK v2 AttributeValue map
      */

@@ -61,34 +61,43 @@ public class SnsUtils {
     
     /**
      * Sends an expiration notification to admins
-     * 
+     *
      * @param snsClient The SNS client
      * @param topicArn The topic ARN to publish to
      * @param task The expired task
+     * @param adminEmail The email of the admin to send the notification to
      */
-    public static void sendAdminExpirationNotification(SnsClient snsClient, String topicArn, Task task) {
+    public static void sendAdminExpirationNotification(SnsClient snsClient, String topicArn, Task task, String adminEmail) {
         try {
-            String message = String.format("Admin Alert: Task '%s' (ID: %s) assigned to user %s has expired. The deadline was %s.", 
+            String message = String.format("Admin Alert: Task '%s' (ID: %s) assigned to user %s has expired. The deadline was %s.",
                     task.getName(), task.getTaskId(), task.getUserId(), task.getDeadline());
-            
+
             Map<String, MessageAttributeValue> messageAttributes = new HashMap<>();
+
+            // Add attribute for targeting specific admin email
+            messageAttributes.put("email", MessageAttributeValue.builder()
+                    .dataType("String")
+                    .stringValue(adminEmail)
+                    .build());
+
+            // Mark this as an admin notification
             messageAttributes.put("for_admin", MessageAttributeValue.builder()
                     .dataType("String")
                     .stringValue("true")
                     .build());
-            
+
             PublishRequest request = PublishRequest.builder()
                     .message(message)
-                    .subject("Admin Alert: Task Expired")
+                    .subject("Admin Alert: " + task.getName())
                     .topicArn(topicArn)
                     .messageAttributes(messageAttributes)
                     .build();
 
             snsClient.publish(request);
-            logger.info("Admin expiration notification sent for taskId: {}", task.getTaskId());
+            logger.info("Admin expiration notification sent to {} for taskId: {}", adminEmail, task.getTaskId());
         } catch (Exception e) {
-            logger.error("Failed to send admin expiration notification for taskId {}: {}", 
-                    task.getTaskId(), e.getMessage());
+            logger.error("Failed to send admin expiration notification to {} for taskId {}: {}",
+                    adminEmail, task.getTaskId(), e.getMessage());
         }
     }
 

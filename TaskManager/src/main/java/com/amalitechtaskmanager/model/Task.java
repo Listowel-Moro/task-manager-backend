@@ -39,9 +39,6 @@ public class Task {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime completedAt;
 
-    @JsonProperty("expired_at")
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime expiredAt;
 
     @JsonProperty("userId")
     private String userId;
@@ -67,13 +64,8 @@ public class Task {
         // Validate that completedAt is only set if status == COMPLETED
         if (status == TaskStatus.COMPLETED) {
             this.completedAt = completedAt;
-            this.expiredAt = null;
-        } else if (status == TaskStatus.EXPIRED) {
-            this.expiredAt = LocalDateTime.now();
-            this.completedAt = null;
         } else {
             this.completedAt = null;
-            this.expiredAt = null;
         }
     }
 
@@ -94,7 +86,6 @@ public class Task {
 
         if ("EXPIRED".equalsIgnoreCase(status)) {
             this.status = TaskStatus.EXPIRED;
-            this.expiredAt = LocalDateTime.now();
         } else if ("COMPLETED".equalsIgnoreCase(status)) {
             this.status = TaskStatus.COMPLETED;
             this.completedAt = LocalDateTime.now();
@@ -111,21 +102,11 @@ public class Task {
         this.completedAt = completedAt;
     }
 
-    public void setExpiredAt(LocalDateTime expiredAt) {
-        if (this.status == TaskStatus.EXPIRED) {
-            this.expiredAt = expiredAt;
-        }
-//        } else {
-//            throw new IllegalStateException("Cannot set expiredAt unless status is EXPIRED");
-//        }
-    }
-
     /**
-     * Marks a task as expired and sets the expiredAt timestamp
+     * Marks a task as expired
      */
     public void markAsExpired() {
         this.status = TaskStatus.EXPIRED;
-        this.expiredAt = LocalDateTime.now();
     }
 
 }
