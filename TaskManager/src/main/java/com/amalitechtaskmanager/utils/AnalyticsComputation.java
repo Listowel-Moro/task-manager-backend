@@ -13,7 +13,6 @@ public class AnalyticsComputation {
         long inProgressTasks = 0;
         long closedTasks = 0;
         long deadlinePassedTasks = 0;
-        Instant now = Instant.now();
 
         for (Map<String, Object> task : tasks) {
             String status = (String) task.getOrDefault("status", "");
@@ -26,19 +25,10 @@ public class AnalyticsComputation {
                 closedTasks++;
             } else if ("open".equalsIgnoreCase(status)) {
                 inProgressTasks++;
+            } else if ("expired".equalsIgnoreCase(status)) {
+                deadlinePassedTasks++;
             }
 
-            // Count deadline passed (not completed and due_date < now)
-            if (dueDate != null && !"completed".equalsIgnoreCase(status)) {
-                try {
-                    Instant due = Instant.parse(dueDate);
-                    if (due.isBefore(now)) {
-                        deadlinePassedTasks++;
-                    }
-                } catch (Exception e) {
-                    // Skip invalid due_date
-                }
-            }
         }
 
         // Build analytics response

@@ -54,17 +54,14 @@ public class GetAdminTasksHandler implements RequestHandler<APIGatewayProxyReque
                 queryParams = new HashMap<>();
             }
 
-            // Use DynamoFilterUtil to build the scan request with filters
-            ScanRequest scanRequest = DynamoFilterUtil.buildScanRequestWithFilters(TABLE_NAME, queryParams);
+            // Build the scan request with proper handling of reserved keywords
+            ScanRequest scanRequest = buildScanRequest(queryParams);
 
             logger.debug("Executing DynamoDB scan with filters: {}", queryParams);
             ScanResponse response = dbClient.scan(scanRequest);
 
-            // Convert DynamoDB items to plain maps using utility functions
-            Map<String, String> finalQueryParams = queryParams;
             List<Map<String, Object>> result = response.items().stream()
                     .map(this::convertDynamoItemToMap)
-                    .filter(task -> applyQueryFilters(task, finalQueryParams))
                     .collect(Collectors.toList());
 
             String responseBody = mapper.writeValueAsString(result);
@@ -79,6 +76,61 @@ public class GetAdminTasksHandler implements RequestHandler<APIGatewayProxyReque
         }
     }
 
+    private ScanRequest buildScanRequest(Map<String, String> queryParams) {
+        if (queryParams.isEmpty()) {
+            return ScanRequest.builder()
+                    .tableName(TABLE_NAME)
+                    .build();
+        }
+
+        StringBuilder filterExpression = new StringBuilder();
+        Map<String, String> expressionAttributeNames = new HashMap<>();
+        Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
+
+        int conditionCount = 0;
+
+        for (Map.Entry<String, String> entry : queryParams.entrySet()) {
+            String attributeName = entry.getKey();
+            String attributeValue = entry.getValue();
+
+            if (conditionCount > 0) {
+                filterExpression.append(" AND ");
+            }
+
+            // Handle 'status' specially as it's a reserved keyword
+            if (attributeName.equals("status")) {
+                String nameAlias = "#s";
+                String valueAlias = ":s";
+
+                filterExpression.append(nameAlias).append(" = ").append(valueAlias);
+                expressionAttributeNames.put(nameAlias, "status");
+                expressionAttributeValues.put(valueAlias, AttributeValue.builder().s(attributeValue).build());
+            } else {
+                // Handle other attributes
+                String nameAlias = "#" + attributeName;
+                String valueAlias = ":" + attributeName;
+
+                filterExpression.append(nameAlias).append(" = ").append(valueAlias);
+                expressionAttributeNames.put(nameAlias, attributeName);
+                expressionAttributeValues.put(valueAlias, AttributeValue.builder().s(attributeValue).build());
+            }
+
+            conditionCount++;
+        }
+
+        ScanRequest.Builder requestBuilder = ScanRequest.builder()
+                .tableName(TABLE_NAME);
+
+        if (conditionCount > 0) {
+            requestBuilder
+                .filterExpression(filterExpression.toString())
+                .expressionAttributeNames(expressionAttributeNames)
+                .expressionAttributeValues(expressionAttributeValues);
+        }
+
+        return requestBuilder.build();
+    }
+
     private Map<String, Object> convertDynamoItemToMap(Map<String, AttributeValue> item) {
         Map<String, Object> result = new HashMap<>();
         for (Map.Entry<String, AttributeValue> entry : item.entrySet()) {
@@ -86,14 +138,5 @@ public class GetAdminTasksHandler implements RequestHandler<APIGatewayProxyReque
                     .ifPresent(value -> result.put(entry.getKey(), value));
         }
         return result;
-    }
-
-    private boolean applyQueryFilters(Map<String, Object> task, Map<String, String> queryParams) {
-        return queryParams.entrySet().stream()
-                .allMatch(entry -> {
-                    Object taskValue = task.get(entry.getKey());
-                    return taskValue != null &&
-                            taskValue.toString().equalsIgnoreCase(entry.getValue());
-                });
     }
 }
