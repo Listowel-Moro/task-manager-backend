@@ -27,8 +27,14 @@ public class ReAssignTaskHandler implements RequestHandler<APIGatewayProxyReques
     private final DynamoDbClient dbClient = DynamoDbFactory.getClient();
     private final String TOPIC_ARN = "arn:aws:sns:us-east-1:123456789012:TaskNotificationTopic";
 
+    private final String TOPIC_ARNC = System.getenv("TaskNotificationTopic");
+
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent event, Context context) {
+
+
+
+
         try {
             Map<String, Object> body = objectMapper.readValue(event.getBody(), Map.class);
             String taskId = event.getPathParameters().get("taskId");
@@ -57,8 +63,8 @@ public class ReAssignTaskHandler implements RequestHandler<APIGatewayProxyReques
                     "{ \"eventType\": \"TaskReassigned\", \"taskId\": \"%s\", \"oldAssignee\": \"%s\", \"newAssignee\": \"%s\" }",
                     taskId, oldUserId, newUserId);
             String subject = "Task Reassigned: " + task.getName();
-            sendEmailNotification(TOPIC_ARN, task.getTaskId(), subject, message);
-            sendEmailNotification(TOPIC_ARN, oldUserId, subject, message);
+            sendEmailNotification(TOPIC_ARNC, task.getTaskId(), subject, message);
+            sendEmailNotification(TOPIC_ARNC, oldUserId, subject, message);
 //            notifyUser(oldUserId, message);
 //            notifyUser(newUserId, message);
 

@@ -525,6 +525,49 @@ Resources:
             Auth:
               Authorizer: CognitoAuthorizer
 
+
+  AdminListUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: AdminListMembersFunction
+      CodeUri: TaskManager/
+      Handler: com.amalitechtaskmanager.handlers.auth.AdminListAllMembers::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminInitiateAuth
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:ListUsers
+                - cognito-idp:ListGroups
+              Resource: !GetAtt UserPool.Arn
+
+
+
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+
+      Events:
+        AdminListMembersApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /admin/list-members
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+
+
+
+
   ForgotPasswordFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -759,10 +802,34 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /tasks
+            Path: /tasks/create
             Method: POST
       Tags:
         Component: Lambda
+
+
+  AdminDeleteTaskFunction:
+          Type: AWS::Serverless::Function
+          Properties:
+            CodeUri: TaskManager/
+            Handler: com.amalitechtaskmanager.handlers.task.AdminDeleteTaskHandler::handleRequest
+            Runtime: java21
+            MemorySize: 512
+            Timeout: 30
+            Role: !GetAtt LambdaExecutionRole.Arn
+            Environment:
+              Variables:
+                TASKS_TABLE: !Ref TasksTable
+            Events:
+              AdminDeleteTask:
+                Type: Api
+                Properties:
+                  RestApiId: !Ref ApiGateway
+                  Path: /tasks/delete/{taskId}
+                  Method: DELETE
+            Tags:
+              Component: Lambda
+
 
   ProcessTaskAssignmentFunction:
     Type: AWS::Serverless::Function
@@ -846,10 +913,32 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /tasks/analytics
+            Path: /tasks/admin-analytics
             Method: GET
       Tags:
         Component: Lambda
+
+  GetMemberAnalyticsFunction:
+          Type: AWS::Serverless::Function
+          Properties:
+            CodeUri: TaskManager/
+            Handler: com.amalitechtaskmanager.handlers.task.MemberGetAnalyticsHandler::handleRequest
+            Runtime: java21
+            MemorySize: 512
+            Timeout: 30
+            Role: !GetAtt LambdaExecutionRole.Arn
+            Environment:
+              Variables:
+                TASKS_TABLE: !Ref TasksTable
+            Events:
+              GetMemberAnalyticsApi:
+                Type: Api
+                Properties:
+                  RestApiId: !Ref ApiGateway
+                  Path: /tasks/member-analytics
+                  Method: GET
+            Tags:
+              Component: Lambda
 
   CompleteTaskFunction:
     Type: AWS::Serverless::Function
