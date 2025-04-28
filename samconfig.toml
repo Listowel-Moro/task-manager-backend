@@ -13,8 +13,8 @@ lint = true
 
 [default.deploy.parameters]
 capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"  # Added CAPABILITY_NAMED_IAM
-confirm_changeset = true
-resolve_s3 = true
+confirm_changeset = false
+resolve_s3 = false
 s3_prefix = "task-manager-backend"
 region = "eu-central-1"
 #profile = "dev-profile"
@@ -22,7 +22,7 @@ parameter_overrides = "Environment=\"Production\""  # Added environment paramete
 image_repositories = []
 
 [default.package.parameters]
-resolve_s3 = true
+resolve_s3 = false
 
 [default.sync.parameters]
 watch = true
