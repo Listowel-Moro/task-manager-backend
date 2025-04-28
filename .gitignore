@@ -3,5 +3,7 @@
 /.idea/workspace.xml
 target/
 .aws-sam/
-.idea/
+.idea/*
+.idea/AugmentWebviewStateStore.xml
+.idea/misc.xml
 samconfig.toml
