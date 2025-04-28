@@ -179,10 +179,18 @@ Resources:
         - Key: Component
           Value: SNS-SQS
 
-  TaskExpirationNotificationTopic:
+  TaskExpirationUserNotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: TaskExpirationNotificationTopic
+      TopicName: TaskExpirationUserNotificationTopic
+      Tags:
+        - Key: Component
+          Value: SNS-SQS
+
+  TaskExpirationAdminNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: TaskExpirationAdminNotificationTopic
       Tags:
         - Key: Component
           Value: SNS-SQS
@@ -299,7 +307,8 @@ Resources:
                   - sns:ListSubscriptionsByTopic
                 Resource:
                   - !Ref TaskAssignmentNotificationTopic
-                  - !Ref TaskExpirationNotificationTopic
+                  - !Ref TaskExpirationUserNotificationTopic
+                  - !Ref TaskExpirationAdminNotificationTopic
                   - !Ref TaskDeadlineNotificationTopic
                   - !Ref EmailNotificationTopic
                   - !Ref ClosedTasksNotificationTopic
@@ -1091,7 +1100,8 @@ Resources:
       Environment:
         Variables:
           TASKS_TABLE: !Ref TasksTable
-          TASK_EXPIRATION_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationNotificationTopic
+          TASK_EXPIRATION_USER_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationUserNotificationTopic
+          TASK_EXPIRATION_ADMIN_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationAdminNotificationTopic
           TASK_DEADLINE_NOTIFICATION_TOPIC_ARN: !Ref TaskDeadlineNotificationTopic
           USER_POOL_ID: !Ref UserPool
           TASK_EXPIRATION_QUEUE_URL: !GetAtt TaskExpirationQueue.QueueUrl
@@ -1129,7 +1139,8 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
-          TASK_EXPIRATION_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationNotificationTopic
+          TASK_EXPIRATION_USER_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationUserNotificationTopic
+          TASK_EXPIRATION_ADMIN_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationAdminNotificationTopic
           USER_POOL_ID: !Ref UserPool
       Events:
         SqsEvent:
@@ -1471,9 +1482,13 @@ Outputs:
     Description: SQS Task Assignment Queue ARN
     Value: !GetAtt TaskAssignmentQueue.Arn
 
-  TaskExpirationNotificationTopicArn:
+  TaskExpirationUserNotificationTopicArn:
     Description: SNS Task Expiration Notification Topic ARN
-    Value: !Ref TaskExpirationNotificationTopic
+    Value: !Ref TaskExpirationUserNotificationTopic
+
+  TaskExpirationAdminNotificationTopicArn:
+    Description: SNS Task Expiration Notification Topic ARN
+    Value: !Ref TaskExpirationAdminNotificationTopic
 
   TeamMemberSubscriptionStepFunctionArn:
     Description: ARN of the Team Member Subscription Step Function
