@@ -1188,7 +1188,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: TaskManager/
-      Handler: com.amalitechtaskmanager.handlers.task.ReAssignTaskHandler::handleRequest
+      Handler: com.amalitechtaskmanager.handlers.task.UpdateTaskHandler::handleRequest
       Runtime: java21
       MemorySize: 512
       Timeout: 30
