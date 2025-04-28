@@ -24,6 +24,8 @@ Resources:
         - email
       EmailVerificationMessage: "Your verification code is {####}"
       EmailVerificationSubject: "Verify your email for our application"
+      UsernameAttributes:
+        - email
       AdminCreateUserConfig:
         AllowAdminCreateUserOnly: false  # Changed to true for admin-only creation
         InviteMessageTemplate:
@@ -38,6 +40,10 @@ Resources:
           Required: true
         - Name: name
           AttributeDataType: String
+          Required: false
+        - Name: custom:role
+          AttributeDataType: String
+          Mutable: true
           Required: false
       Policies:
         PasswordPolicy:
@@ -59,6 +65,7 @@ Resources:
         - ALLOW_REFRESH_TOKEN_AUTH
       AccessTokenValidity: 5
       IdTokenValidity: 5
+      PreventUserExistenceErrors: ENABLED
 
   AdminUserGroup:
     Type: AWS::Cognito::UserPoolGroup
@@ -82,7 +89,7 @@ Resources:
     Properties:
       StageName: Prod
       Cors:
-        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization'"
         AllowOrigin: "'*'"
       Auth:
@@ -116,17 +123,13 @@ Resources:
   CommentsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: Comments
+      TableName: Comment
       AttributeDefinitions:
         - AttributeName: commentId
-          AttributeType: S
-        - AttributeName: taskId
           AttributeType: S
       KeySchema:
         - AttributeName: commentId
           KeyType: HASH
-        - AttributeName: taskId
-          KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
       Tags:
         - Key: Component
@@ -179,7 +182,7 @@ Resources:
   TaskExpirationNotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: task-expiration-notifications
+      TopicName: TaskExpirationNotificationTopic
       Tags:
         - Key: Component
           Value: SNS-SQS
@@ -199,6 +202,8 @@ Resources:
       QueueName: TaskAssignmentQueue.fifo
       FifoQueue: true
       ContentBasedDeduplication: true
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 1209600
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt TaskCreationDLQ.Arn
         maxReceiveCount: 3
@@ -210,6 +215,28 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: TaskDeadlineQueue
+      Tags:
+        - Key: Component
+          Value: SNS-SQS
+
+  TaskExpirationQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: TaskExpirationQueue
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 1209600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt TaskExpirationDeadLetterQueue.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Component
+          Value: SNS-SQS
+
+  TaskExpirationDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: TaskExpirationDeadLetterQueue
+      MessageRetentionPeriod: 1209600
       Tags:
         - Key: Component
           Value: SNS-SQS
@@ -245,17 +272,31 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:*
-                Resource: !GetAtt TasksTable.Arn
+                Resource:
+                  - !GetAtt TasksTable.Arn
+                  - !GetAtt CommentsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:*
+                Resource:
+                  - !GetAtt TasksTable.Arn
+                  - !GetAtt CommentsTable.Arn
               - Effect: Allow
                 Action:
                   - sqs:SendMessage
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
-                Resource: !GetAtt TaskAssignmentQueue.Arn
+                Resource:
+                  - !GetAtt TaskAssignmentQueue.Arn
+                  - !GetAtt TaskExpirationQueue.Arn
+                  - !GetAtt TaskExpirationDeadLetterQueue.Arn
+                  - !GetAtt TaskDeadlineQueue.Arn
               - Effect: Allow
                 Action:
                   - sns:Publish
+                  - sns:Subscribe
+                  - sns:ListSubscriptionsByTopic
                 Resource:
                   - !Ref TaskAssignmentNotificationTopic
                   - !Ref TaskExpirationNotificationTopic
@@ -263,6 +304,15 @@ Resources:
                   - !Ref EmailNotificationTopic
                   - !Ref ClosedTasksNotificationTopic
                   - !Ref TaskCompleteNotificationTopic
+              - Effect: Allow
+                Action:
+                  - scheduler:CreateSchedule
+                  - scheduler:DeleteSchedule
+                  - scheduler:GetSchedule
+                Resource: '*'
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt EventBridgeSchedulerRole.Arn
       Tags:
         - Key: Component
           Value: Lambda
@@ -286,22 +336,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
-                Resource: !Sub
-                  - arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ReminderProcessorLambda-${Environment}
-                  - Environment: !Ref Environment
-
-
-  EventBridgeSchedulerPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      ManagedPolicyName: !Sub EventBridgeSchedulerPolicy-${Environment}
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action:
-              - lambda:InvokeFunction
-            Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:ReminderProcessorLambda-${Environment}"
+                Resource: '*'
 
   StepFunctionRole:
     Type: AWS::IAM::Role
@@ -525,6 +560,49 @@ Resources:
             Auth:
               Authorizer: CognitoAuthorizer
 
+
+  AdminListUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: AdminListMembersFunction
+      CodeUri: TaskManager/
+      Handler: com.amalitechtaskmanager.handlers.auth.AdminListAllMembers::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminInitiateAuth
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:ListUsers
+                - cognito-idp:ListGroups
+              Resource: !GetAtt UserPool.Arn
+
+
+
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+
+      Events:
+        AdminListMembersApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /admin/list-members
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+
+
+
+
   ForgotPasswordFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -738,11 +816,44 @@ Resources:
             Auth:
               Authorizer: CognitoAuthorizer
 
+  GetAllMembersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetAllMembersFunction
+      CodeUri: TaskManager/
+      Handler: com.amalitechtaskmanager.handlers.member.GetAllMembersHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:ListUsers
+              Resource: !GetAtt UserPool.Arn
+      Events:
+        GetAllMembers:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /members
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+
   #============================================================================
   # Lambda Functions - Task Management
   #============================================================================
   CreateTaskFunction:
     Type: AWS::Serverless::Function
+    DependsOn:
+      - TaskExpirationHandlerFunction
+      - EventBridgeSchedulerRole
     Properties:
       CodeUri: TaskManager/
       Handler: com.amalitechtaskmanager.handlers.task.CreateTaskHandler::handleRequest
@@ -754,15 +865,41 @@ Resources:
         Variables:
           TASKS_TABLE: !Ref TasksTable
           TASK_ASSIGNMENT_QUEUE: !GetAtt TaskAssignmentQueue.QueueUrl
+          TASK_EXPIRATION_LAMBDA_ARN: !GetAtt TaskExpirationHandlerFunction.Arn
+          SCHEDULER_ROLE_ARN: !GetAtt EventBridgeSchedulerRole.Arn
       Events:
         Api:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /tasks
+            Path: /tasks/create
             Method: POST
       Tags:
         Component: Lambda
+
+
+  AdminDeleteTaskFunction:
+          Type: AWS::Serverless::Function
+          Properties:
+            CodeUri: TaskManager/
+            Handler: com.amalitechtaskmanager.handlers.task.AdminDeleteTaskHandler::handleRequest
+            Runtime: java21
+            MemorySize: 512
+            Timeout: 30
+            Role: !GetAtt LambdaExecutionRole.Arn
+            Environment:
+              Variables:
+                TASKS_TABLE: !Ref TasksTable
+            Events:
+              AdminDeleteTask:
+                Type: Api
+                Properties:
+                  RestApiId: !Ref ApiGateway
+                  Path: /tasks/delete/{taskId}
+                  Method: DELETE
+            Tags:
+              Component: Lambda
+
 
   ProcessTaskAssignmentFunction:
     Type: AWS::Serverless::Function
@@ -802,7 +939,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /tasks
+            Path: /admin/tasks
             Method: GET
       Tags:
         Component: Lambda
@@ -824,7 +961,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /tasks/{taskId}
+            Path: /admin/tasks/{taskId}
             Method: GET
       Tags:
         Component: Lambda
@@ -846,10 +983,32 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /tasks/analytics
+            Path: /tasks/admin-analytics
             Method: GET
       Tags:
         Component: Lambda
+
+  GetMemberAnalyticsFunction:
+          Type: AWS::Serverless::Function
+          Properties:
+            CodeUri: TaskManager/
+            Handler: com.amalitechtaskmanager.handlers.task.MemberGetAnalyticsHandler::handleRequest
+            Runtime: java21
+            MemorySize: 512
+            Timeout: 30
+            Role: !GetAtt LambdaExecutionRole.Arn
+            Environment:
+              Variables:
+                TASKS_TABLE: !Ref TasksTable
+            Events:
+              GetMemberAnalyticsApi:
+                Type: Api
+                Properties:
+                  RestApiId: !Ref ApiGateway
+                  Path: /tasks/member-analytics
+                  Method: GET
+            Tags:
+              Component: Lambda
 
   CompleteTaskFunction:
     Type: AWS::Serverless::Function
@@ -914,7 +1073,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /tasks/{taskId}
+            Path: /tasks/{taskId}/reassign
             Method: PUT
       Tags:
         Component: Lambda
@@ -934,12 +1093,140 @@ Resources:
           TASKS_TABLE: !Ref TasksTable
           TASK_EXPIRATION_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationNotificationTopic
           TASK_DEADLINE_NOTIFICATION_TOPIC_ARN: !Ref TaskDeadlineNotificationTopic
+          USER_POOL_ID: !Ref UserPool
+          TASK_EXPIRATION_QUEUE_URL: !GetAtt TaskExpirationQueue.QueueUrl
+      Tags:
+        Component: Lambda
+
+  TaskExpirationScheduleRule:
+    Type: AWS::Events::Rule
+    DependsOn: TaskExpirationHandlerFunction
+    Properties:
+      Name: !Sub TaskExpirationSchedule-${Environment}
+      Description: "Daily check for expired tasks"
+      ScheduleExpression: "rate(1 day)"
+      State: ENABLED
+      Targets:
+        - Id: TaskExpirationTarget
+          Arn: !GetAtt TaskExpirationHandlerFunction.Arn
+
+  TaskExpirationPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref TaskExpirationHandlerFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt TaskExpirationScheduleRule.Arn
+
+  ExpirationQueueHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: TaskManager/
+      Handler: com.amalitechtaskmanager.handlers.task.ExpirationQueueHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TASK_EXPIRATION_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationNotificationTopic
+          USER_POOL_ID: !Ref UserPool
       Events:
-        TaskExpirationSchedule:
-          Type: Schedule
+        SqsEvent:
+          Type: SQS
           Properties:
-            Schedule: rate(1 day)
-            Enabled: true
+            Queue: !GetAtt TaskExpirationQueue.Arn
+            BatchSize: 10
+      Tags:
+        Component: Lambda
+
+  GetTasksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: TaskManager/
+      Handler: com.amalitechtaskmanager.handlers.task.GetTasksHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /tasks
+            Method: GET
+      Tags:
+        Component: Lambda
+
+  GetTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: TaskManager/
+      Handler: com.amalitechtaskmanager.handlers.task.GetTaskHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /tasks/{taskId}
+            Method: GET
+      Tags:
+        Component: Lambda
+
+  UpdateTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: TaskManager/
+      Handler: com.amalitechtaskmanager.handlers.task.UpdateTaskHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /tasks/{taskId}
+            Method: PUT
+      Tags:
+        Component: Lambda
+
+  DeleteTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: TaskManager/
+      Handler: com.amalitechtaskmanager.handlers.task.DeleteTaskHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TASKS_TABLE: !Ref TasksTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /tasks/{taskId}
+            Method: DELETE
+      Tags:
+        Component: Lambda
 
   #============================================================================
   # Lambda Functions - Comments
@@ -963,7 +1250,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /comments
+            Path: /comments/post
             Method: POST
 
   DeleteCommentFunction:
@@ -978,17 +1265,22 @@ Resources:
         Variables:
           TABLE_NAME: Comments
       Policies:
-        - DynamoDBWritePolicy:
-            TableName: Comments
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:DeleteItem
+              Resource: !GetAtt CommentsTable.Arn
       Events:
         DeleteCommentApi:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /comments
+            Path: /comments/delete/{id}
             Method: DELETE
 
-  #============================================================================
+
+    #============================================================================
   # Lambda Functions - Notifications
   #============================================================================
   CreateDeadlineEventLambda:
@@ -1202,3 +1494,7 @@ Outputs:
   UpdateTaskScheduleLambdaArn:
     Description: ARN of the Update Task Schedule Lambda
     Value: !GetAtt UpdateTaskScheduleLambda.Arn
+
+  TaskExpirationQueueUrl:
+    Description: SQS Task Expiration Queue URL
+    Value: !GetAtt TaskExpirationQueue.QueueUrl

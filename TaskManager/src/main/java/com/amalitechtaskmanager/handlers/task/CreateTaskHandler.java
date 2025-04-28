@@ -22,12 +22,14 @@ import software.amazon.awssdk.services.scheduler.SchedulerClient;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
+import static com.amalitechtaskmanager.utils.ApiResponseUtil.createResponse;
+import static com.amalitechtaskmanager.utils.CheckUserRoleUtil.isUserInAdminGroup;
+
 public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     private final DynamoDbClient dynamoDbClient = DynamoDbClient.create();
     private final SqsClient sqsClient = SqsClient.create();
     private final SchedulerClient schedulerClient = SchedulerClient.create();
     private final SchedulerUtils schedulerUtils;
-//    private final ObjectMapper objectMapper = new ObjectMapper();
     private final ObjectMapper objectMapper = ObjectMapperFactory.getMapper();
     private final String tasksTable = System.getenv("TASKS_TABLE");
     private final String taskAssignmentQueue = System.getenv("TASK_ASSIGNMENT_QUEUE");
@@ -40,6 +42,25 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
         try {
+
+            String idToken = input.getHeaders().get("Authorization");
+
+            if (idToken == null) {
+                return createResponse(401, "Unauthorized-Missing Header");
+            }
+
+            if (idToken.startsWith("Bearer")) {
+                idToken = idToken.substring(7);
+            }
+
+
+            if (!isUserInAdminGroup(idToken)) {
+                return createResponse(403, "Forbidden-User not authorized for this operation");
+            }
+
+
+
+
             Task task = objectMapper.readValue(input.getBody(), Task.class);
             if (task.getName() == null || task.getName().isEmpty() ||
                 task.getDeadline() == null  ||
