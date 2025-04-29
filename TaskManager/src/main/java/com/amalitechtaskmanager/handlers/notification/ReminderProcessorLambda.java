@@ -38,7 +38,6 @@ public class ReminderProcessorLambda implements RequestHandler<ScheduledEvent, N
             logger.error("Missing required environment variables.");
             return new NotificationResponse(false, "Missing required environment variables.");
         }
-        logger.info("Processing reminder event: {}", event);
 
         Optional<String> taskIdOpt = getTaskIdFromEvent(event);
 
@@ -48,10 +47,9 @@ public class ReminderProcessorLambda implements RequestHandler<ScheduledEvent, N
         }
 
         String taskId = taskIdOpt.get();
-        logger.info("Processing reminder for taskId: {}", taskId);
 
         Optional<Map<String, AttributeValue>> taskOpt = DynamoDbUtils.getTask(dynamoDbClient, TABLE_NAME, taskId);
-        logger.info("Task found: {}", taskOpt.isPresent());
+
         if (taskOpt.isEmpty()) {
             logger.error("Task not found for taskId: {}", taskId);
             return new NotificationResponse(false, "Task not found for taskId: " + taskId);
@@ -77,8 +75,6 @@ public class ReminderProcessorLambda implements RequestHandler<ScheduledEvent, N
         }
 
         String userId = userIdOpt.get();
-        String title = titleOpt.orElse("Untitled");
-        String deadline = deadlineOpt.get();
 
         Optional<String> emailOpt = CognitoUtils.getUserEmail(cognitoClient, USER_POOL_ID, userId);
         if (emailOpt.isEmpty()) {
@@ -87,18 +83,21 @@ public class ReminderProcessorLambda implements RequestHandler<ScheduledEvent, N
         }
         String message = String.format(
                 "Heading: Task Deadline Reminder\n" +
+                        "Hello Team Member, Your task is due soon. This is a gentle reminder to prompt you on"+
+                        "Your Task that is soon due, please ensure all deliverables are completed on time.\n\n"+
                         "Task ID: %s\n" +
                         "Task Title: %s\n" +
                         "Assigned To: %s\n" +
                         "Due Date: %s\n" +
                         "Priority: %s\n\n" +
-                        "Reminder: The task '%s' assigned to you is due soon. Please ensure all deliverables are completed on time.",
+                        "In case of any questions or concerns, please contact your supervisor.\n\n" +
+                        "Best regards,\n" +
+                        "Task Management System",
                 taskId,
                 taskOpt.get().get("name").s(),
                 taskOpt.get().get("userId").s(),
                 taskOpt.get().get("deadline").s(),
-                "High",
-                taskOpt.get().get("name").s()
+                "High"
         );
 
 
@@ -110,7 +109,6 @@ public class ReminderProcessorLambda implements RequestHandler<ScheduledEvent, N
     private Optional<String> getTaskIdFromEvent(ScheduledEvent event) {
         try {
             Map<String, Object> eventDetail = (Map<String, Object>) event.getDetail();
-            logger.info("Event detail: {}", eventDetail);
             return Optional.ofNullable(eventDetail)
                     .map(detail -> detail.get("taskId"))
                     .map(Object::toString);
