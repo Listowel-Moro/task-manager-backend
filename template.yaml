@@ -127,13 +127,20 @@ Resources:
       AttributeDefinitions:
         - AttributeName: commentId
           AttributeType: S
+        - AttributeName: taskId
+          AttributeType: S
       KeySchema:
         - AttributeName: commentId
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
-      Tags:
-        - Key: Component
-          Value: DynamoDB
+      GlobalSecondaryIndexes:
+        - IndexName: taskId-index
+          KeySchema:
+            - AttributeName: taskId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
 
   #============================================================================
   # SNS and SQS Resources
@@ -322,6 +329,13 @@ Resources:
               - Effect: Allow
                 Action: iam:PassRole
                 Resource: !GetAtt EventBridgeSchedulerRole.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt CommentsTable.Arn
+                  - !Sub "${CommentsTable.Arn}/index/taskId-index"
+
       Tags:
         - Key: Component
           Value: Lambda
@@ -1250,12 +1264,13 @@ Resources:
       Runtime: java21
       MemorySize: 512
       Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
-          TABLE_NAME: Comments
+          TABLE_NAME: Comment
       Policies:
         - DynamoDBWritePolicy:
-            TableName: Comments
+            TableName: Comment
       Events:
         CreateCommentApi:
           Type: Api
@@ -1263,6 +1278,53 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /comments/post
             Method: POST
+
+
+
+  GetCommentsByTaskIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: TaskManager/
+      Handler: com.amalitechtaskmanager.handlers.comment.GetCommentsByTaskIdHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: Comment
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: Comment
+      Events:
+        GetCommentsByTaskIdApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /tasks/{taskId}/comments
+            Method: GET
+
+  GetCommentByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: TaskManager/
+      Handler: com.amalitechtaskmanager.handlers.comment.GetCommentByIdHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: Comment
+      Events:
+        GetCommentByIdApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /comments/{commentId}
+            Method: GET
+
+
 
   DeleteCommentFunction:
     Type: AWS::Serverless::Function
@@ -1274,7 +1336,7 @@ Resources:
       Timeout: 30
       Environment:
         Variables:
-          TABLE_NAME: Comments
+          TABLE_NAME: Comment
       Policies:
         - Version: "2012-10-17"
           Statement:
