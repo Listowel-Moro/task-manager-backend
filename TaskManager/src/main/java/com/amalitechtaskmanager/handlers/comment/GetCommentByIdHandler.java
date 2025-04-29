@@ -14,6 +14,8 @@ import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import static com.amalitechtaskmanager.utils.ApiResponseUtil.createResponse;
+
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -83,17 +85,12 @@ public class GetCommentByIdHandler implements RequestHandler<APIGatewayProxyRequ
             return createResponse(400, "Error processing JSON: " + e.getMessage());
         } catch (DynamoDbException e) {
             context.getLogger().log("DynamoDB error: " + e.getMessage());
-            return new APIGatewayProxyResponseEvent()
-                    .withStatusCode(200)
-                    .withBody(objectMapper.writeValueAsString(responseBody))
-                    .withHeaders(Map.of("Content-Type", "application/json"));
+            return createResponse(500, "Failed to retrieve comment: " + e.getMessage());
         } catch (Exception e) {
             context.getLogger().log("Unexpected error: " + e.getMessage());
-            return new APIGatewayProxyResponseEvent()
-                    .withStatusCode(200)
-                    .withBody(objectMapper.writeValueAsString(responseBody))
-                    .withHeaders(Map.of("Content-Type", "application/json"));
+            return createResponse(500, "Unexpected error occurred");
         }
     }
+
 
 }
