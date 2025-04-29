@@ -83,7 +83,8 @@ public class ReminderProcessorLambda implements RequestHandler<ScheduledEvent, N
         }
         String message = String.format(
                 "Heading: Task Deadline Reminder\n" +
-                        "Hello Team Member, Your task is due soon. Please ensure all deliverables are completed on time.\n\n"+
+                        "Hello Team Member, Your task is due soon. This is a gentle reminder to prompt you on"+
+                        "Your Task that is soon due, please ensure all deliverables are completed on time.\n\n"+
                         "Task ID: %s\n" +
                         "Task Title: %s\n" +
                         "Assigned To: %s\n" +
