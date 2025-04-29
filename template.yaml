@@ -890,6 +890,9 @@ Resources:
           TASK_ASSIGNMENT_QUEUE: !GetAtt TaskAssignmentQueue.QueueUrl
           TASK_EXPIRATION_LAMBDA_ARN: !GetAtt TaskExpirationHandlerFunction.Arn
           SCHEDULER_ROLE_ARN: !GetAtt EventBridgeSchedulerRole.Arn
+          TASK_EXPIRATION_USER_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationUserNotificationTopic
+          TASK_EXPIRATION_ADMIN_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationAdminNotificationTopic
+          USER_POOL_ID: !Ref UserPool
       Events:
         Api:
           Type: Api

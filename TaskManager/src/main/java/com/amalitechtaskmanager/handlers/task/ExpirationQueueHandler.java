@@ -14,10 +14,6 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.sns.SnsClient;
-import software.amazon.awssdk.services.sns.model.ListSubscriptionsByTopicRequest;
-import software.amazon.awssdk.services.sns.model.ListSubscriptionsByTopicResponse;
-import software.amazon.awssdk.services.sns.model.SubscribeRequest;
-import software.amazon.awssdk.services.sns.model.Subscription;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminGetUserRequest;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminGetUserResponse;
@@ -101,56 +97,11 @@ public class ExpirationQueueHandler implements RequestHandler<SQSEvent, Void> {
                     .collect(Collectors.toList());
 
             logger.info("Found {} admin emails from Cognito", emails.size());
+            context.getLogger().log("UserPoolId : " + userPoolId);
             return emails;
         } catch (Exception e) {
             logger.error("Error fetching admin emails: {}", e.getMessage(), e);
             return List.of();
-        }
-    }
-
-    private boolean isEmailSubscribed(String email, String topicArn) {
-        try {
-            ListSubscriptionsByTopicRequest request = ListSubscriptionsByTopicRequest.builder()
-                    .topicArn(topicArn)
-                    .build();
-
-            ListSubscriptionsByTopicResponse response = snsClient.listSubscriptionsByTopic(request);
-
-            for (Subscription subscription : response.subscriptions()) {
-                if ("email".equals(subscription.protocol()) && email.equals(subscription.endpoint())) {
-                    logger.info("Email {} is already subscribed to topic {}", email, topicArn);
-                    return true;
-                }
-            }
-
-            logger.info("Email {} is not yet subscribed to topic {}", email, topicArn);
-            return false;
-        } catch (Exception e) {
-            logger.error("Error checking subscription status for {} on topic {}: {}", email, topicArn, e.getMessage(), e);
-            return false;
-        }
-    }
-
-    private void subscribeEmailIfNeeded(String email, String topicArn) {
-        if (email == null || email.isEmpty()) {
-            return;
-        }
-
-        try {
-            if (!isEmailSubscribed(email, topicArn)) {
-                logger.info("Subscribing email {} to topic {}", email, topicArn);
-                SubscribeRequest subscribeRequest = SubscribeRequest.builder()
-                        .protocol("email")
-                        .endpoint(email)
-                        .topicArn(topicArn)
-                        .returnSubscriptionArn(true)
-                        .build();
-
-                snsClient.subscribe(subscribeRequest);
-                logger.info("Successfully subscribed {} to topic {}", email, topicArn);
-            }
-        } catch (Exception e) {
-            logger.error("Error subscribing email {} to topic {}: {}", email, topicArn, e.getMessage(), e);
         }
     }
 
@@ -173,10 +124,6 @@ public class ExpirationQueueHandler implements RequestHandler<SQSEvent, Void> {
                                 break;
                             }
                         }
-
-                        if (userEmail != null && !userEmail.isEmpty()) {
-                            subscribeEmailIfNeeded(userEmail, taskExpirationUserNotificationTopicArn);
-                        }
                     } catch (Exception e) {
                         logger.error("Error fetching user email: {}", e.getMessage(), e);
                     }
@@ -184,10 +131,6 @@ public class ExpirationQueueHandler implements RequestHandler<SQSEvent, Void> {
 
                 List<String> adminEmails = getAdminEmails(context);
                 context.getLogger().log("Found the following " + adminEmails.size() + " admin emails from Cognito");
-
-                for (String adminEmail : adminEmails) {
-                    subscribeEmailIfNeeded(adminEmail, taskExpirationAdminNotificationTopicArn);
-                }
 
                 if (userEmail != null && !userEmail.isEmpty()) {
                     String userSubject = "Task Expired: " + task.getName();
