@@ -1323,6 +1323,7 @@ Resources:
       Runtime: java21
       MemorySize: 512
       Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
           TABLE_NAME: Comment
