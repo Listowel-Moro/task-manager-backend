@@ -78,22 +78,16 @@ public class CreateCommentHandler implements RequestHandler<APIGatewayProxyReque
             return createResponse(400, "Invalid JSON format in request body");
         } catch (DynamoDbException e) {
             context.getLogger().log("DynamoDB error: " + e.getMessage());
-            return createResponse(500, "Failed to create comment: " + e.getMessage());
+            return new APIGatewayProxyResponseEvent()
+                    .withStatusCode(200)
+                    .withBody(objectMapper.writeValueAsString(responseBody))
+                    .withHeaders(Map.of("Content-Type", "application/json"));
         } catch (Exception e) {
             context.getLogger().log("Unexpected error: " + e.getMessage());
-            return createResponse(500, "Unexpected error occurred");
+            return new APIGatewayProxyResponseEvent()
+                    .withStatusCode(500)
+                    .withBody("{\"error\": \"" + e.getMessage() + "\"}");
         }
     }
 
-    private APIGatewayProxyResponseEvent createResponse(int statusCode, String body) {
-        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
-        response.setStatusCode(statusCode);
-        response.setBody(body);
-
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Content-Type", "application/json");
-        response.setHeaders(headers);
-
-        return response;
-    }
 }

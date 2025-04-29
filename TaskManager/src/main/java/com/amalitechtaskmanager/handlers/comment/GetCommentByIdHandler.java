@@ -83,22 +83,17 @@ public class GetCommentByIdHandler implements RequestHandler<APIGatewayProxyRequ
             return createResponse(400, "Error processing JSON: " + e.getMessage());
         } catch (DynamoDbException e) {
             context.getLogger().log("DynamoDB error: " + e.getMessage());
-            return createResponse(500, "Failed to retrieve comment: " + e.getMessage());
+            return new APIGatewayProxyResponseEvent()
+                    .withStatusCode(200)
+                    .withBody(objectMapper.writeValueAsString(responseBody))
+                    .withHeaders(Map.of("Content-Type", "application/json"));
         } catch (Exception e) {
             context.getLogger().log("Unexpected error: " + e.getMessage());
-            return createResponse(500, "Unexpected error occurred");
+            return new APIGatewayProxyResponseEvent()
+                    .withStatusCode(200)
+                    .withBody(objectMapper.writeValueAsString(responseBody))
+                    .withHeaders(Map.of("Content-Type", "application/json"));
         }
     }
 
-    private APIGatewayProxyResponseEvent createResponse(int statusCode, String body) {
-        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
-        response.setStatusCode(statusCode);
-        response.setBody(body);
-
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Content-Type", "application/json");
-        response.setHeaders(headers);
-
-        return response;
-    }
 }
