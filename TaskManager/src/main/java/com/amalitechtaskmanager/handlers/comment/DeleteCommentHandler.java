@@ -17,7 +17,7 @@ import java.util.Map;
 public class DeleteCommentHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
     private final DynamoDbClient dynamoDbClient;
-    private static final String TABLE_NAME = "Comments";
+    private static final String TABLE_NAME = System.getenv("TABLE_NAME");
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public DeleteCommentHandler() {
@@ -34,16 +34,14 @@ public class DeleteCommentHandler implements RequestHandler<APIGatewayProxyReque
         APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
 
         try {
-            // Parse input
-            DeleteCommentRequest request = objectMapper.readValue(input.getBody(), DeleteCommentRequest.class);
 
-            if (request == null || request.commentId == null) {
+            String commentId= input.getPathParameters().get("commentId");
+
+            if( commentId==null ||commentId.isEmpty()) {
                 return createResponse(400, "Invalid input: commentId is required");
             }
-
-            // Prepare key for deletion
             Map<String, AttributeValue> key = new HashMap<>();
-            key.put("commentId", AttributeValue.builder().s(request.commentId).build());
+            key.put("commentId", AttributeValue.builder().s(commentId).build());
 
             // Create DeleteItem request
             DeleteItemRequest deleteItemRequest = DeleteItemRequest.builder()
@@ -83,8 +81,4 @@ public class DeleteCommentHandler implements RequestHandler<APIGatewayProxyReque
         return response;
     }
 
-    // Request class to parse input
-    private static class DeleteCommentRequest {
-        public String commentId;
-    }
 }

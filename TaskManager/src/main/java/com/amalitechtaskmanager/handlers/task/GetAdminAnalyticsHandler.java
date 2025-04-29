@@ -7,7 +7,6 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.amalitechtaskmanager.factories.DynamoDbFactory;
 import com.amalitechtaskmanager.factories.ObjectMapperFactory;
 import com.amalitechtaskmanager.utils.ApiResponseUtil;
-import com.amalitechtaskmanager.utils.DynamoDbUtils;
 import com.amalitechtaskmanager.utils.AnalyticsComputation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -40,12 +39,9 @@ public class GetAdminAnalyticsHandler implements RequestHandler<APIGatewayProxyR
             List<Map<String, Object>> tasks = fetchTasksWithTimeRange(timeRange);
 
             // Calculate basic analytics
-            Map<String, Object> basicAnalytics = AnalyticsComputation.computeAnalytics(tasks);
+            Map<String, Object> analytics = AnalyticsComputation.computeAnalytics(tasks);
 
-            // Add additional analytics
-            //Map<String, Object> enhancedAnalytics = enhanceAnalytics(basicAnalytics, tasks);
-
-            String responseBody = mapper.writeValueAsString(basicAnalytics);
+            String responseBody = mapper.writeValueAsString(analytics);
             logger.info("Successfully computed analytics for {} tasks", tasks.size());
 
             return ApiResponseUtil.createResponse(200, responseBody);
@@ -85,6 +81,8 @@ public class GetAdminAnalyticsHandler implements RequestHandler<APIGatewayProxyR
                     .ifPresent(value -> result.put(entry.getKey(), value));
         }
         return result;
+
+
     }
 
     private Instant calculateCutoffTime(String timeRange) {
@@ -99,61 +97,4 @@ public class GetAdminAnalyticsHandler implements RequestHandler<APIGatewayProxyR
         };
     }
 
-//    private Map<String, Object> enhanceAnalytics(Map<String, Object> basicAnalytics, List<Map<String, Object>> tasks) {
-//        Map<String, Object> enhanced = new HashMap<>(basicAnalytics);
-//
-//        // Add task priority distribution
-//        Map<String, Long> priorityDistribution = tasks.stream()
-//                .map(task -> (String) task.getOrDefault("priority", "MEDIUM"))
-//                .collect(Collectors.groupingBy(
-//                        priority -> priority,
-//                        Collectors.counting()
-//                ));
-//        enhanced.put("priorityDistribution", priorityDistribution);
-//
-//        // Add assignee workload
-//        Map<String, Long> assigneeWorkload = tasks.stream()
-//                .filter(task -> task.get("userId") != null &&
-//                               !task.get("status").equals("completed"))
-//                .collect(Collectors.groupingBy(
-//                        task -> (String) task.get("userId"),
-//                        Collectors.counting()
-//                ));
-//        enhanced.put("assigneeWorkload", assigneeWorkload);
-//
-//        // Add completion rate
-//        int totalTasks = tasks.size();
-//        long completedTasks = tasks.stream()
-//                .filter(task -> "completed".equalsIgnoreCase((String) task.get("status")))
-//                .count();
-//        double completionRate = totalTasks > 0 ?
-//                (double) completedTasks / totalTasks * 100 : 0;
-//        enhanced.put("completionRate", Math.round(completionRate * 100.0) / 100.0);
-//
-//        // Add overdue tasks percentage
-//        long overdueTasks = tasks.stream()
-//                .filter(this::isTaskOverdue)
-//                .count();
-//        double overdueRate = totalTasks > 0 ?
-//                (double) overdueTasks / totalTasks * 100 : 0;
-//        enhanced.put("overdueRate", Math.round(overdueRate * 100.0) / 100.0);
-//
-//        return enhanced;
-//    }
-
-//    private boolean isTaskOverdue(Map<String, Object> task) {
-//        String deadline = (String) task.get("deadline");
-//        String status = (String) task.get("status");
-//
-//        if (deadline == null || "completed".equalsIgnoreCase(status)) {
-//            return false;
-//        }
-//
-//        try {
-//            return Instant.parse(deadline).isBefore(Instant.now());
-//        } catch (Exception e) {
-//            logger.warn("Invalid deadline format for task: {}", task.get("taskId"));
-//            return false;
-//        }
-//    }
 }

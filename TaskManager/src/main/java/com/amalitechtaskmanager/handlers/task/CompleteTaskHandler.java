@@ -1,6 +1,7 @@
 package com.amalitechtaskmanager.handlers.task;
 
 import com.amalitechtaskmanager.model.TaskStatus;
+import com.amalitechtaskmanager.utils.AuthorizerUtil;
 import com.amalitechtaskmanager.utils.TaskUtils;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;

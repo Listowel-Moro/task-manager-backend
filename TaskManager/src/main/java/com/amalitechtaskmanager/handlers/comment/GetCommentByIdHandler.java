@@ -8,7 +8,8 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.fasterxml.jackson.core.JsonProcessingException;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
-import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -17,22 +18,21 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
-public class CreateCommentHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
+public class GetCommentByIdHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
     private final DynamoDbClient dynamoDbClient;
     private static final String TABLE_NAME = System.getenv("TABLE_NAME");
     private final ObjectMapper objectMapper;
 
-    public CreateCommentHandler() {
+    public GetCommentByIdHandler() {
         this.dynamoDbClient = DynamoDbClient.create();
         this.objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
         objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
-    public CreateCommentHandler(DynamoDbClient dynamoDbClient) {
+    public GetCommentByIdHandler(DynamoDbClient dynamoDbClient) {
         this.dynamoDbClient = dynamoDbClient;
         this.objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
@@ -42,43 +42,48 @@ public class CreateCommentHandler implements RequestHandler<APIGatewayProxyReque
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
         try {
-            Comment comment = objectMapper.readValue(input.getBody(), Comment.class);
-
-            if (comment.getUserId() == null || comment.getTaskId() == null || comment.getContent() == null) {
-                return createResponse(400, "Invalid input: userId, taskId, and content are required");
+            // Get commentId from path parameters
+            Map<String, String> pathParameters = input.getPathParameters();
+            if (pathParameters == null || !pathParameters.containsKey("commentId")) {
+                return createResponse(400, "Missing commentId parameter");
             }
 
-            String commentId = UUID.randomUUID().toString();
-            LocalDateTime now = LocalDateTime.now();
+            String commentId = pathParameters.get("commentId");
 
-            comment.setCommentId(commentId);
-            comment.setCreatedAt(now);
-            comment.setUpdatedAt(now);
+            // Create a key to get the specific comment
+            Map<String, AttributeValue> key = new HashMap<>();
+            key.put("commentId", AttributeValue.builder().s(commentId).build());
 
-            Map<String, AttributeValue> item = new HashMap<>();
-            item.put("commentId", AttributeValue.builder().s(comment.getCommentId()).build());
-            item.put("userId", AttributeValue.builder().s(comment.getUserId()).build());
-            item.put("taskId", AttributeValue.builder().s(comment.getTaskId()).build());
-            item.put("content", AttributeValue.builder().s(comment.getContent()).build());
-            item.put("createdAt", AttributeValue.builder().s(comment.getCreatedAt().toString()).build());
-            item.put("updatedAt", AttributeValue.builder().s(comment.getUpdatedAt().toString()).build());
+            // Execute the GetItem operation
+            GetItemResponse getItemResponse = dynamoDbClient.getItem(
+                    GetItemRequest.builder()
+                            .tableName(TABLE_NAME)
+                            .key(key)
+                            .build());
 
-            dynamoDbClient.putItem(PutItemRequest.builder()
-                    .tableName(TABLE_NAME)
-                    .item(item)
-                    .build());
+            // Check if the item exists
+            if (getItemResponse.item() == null || getItemResponse.item().isEmpty()) {
+                return createResponse(404, "Comment not found");
+            }
 
-            Map<String, String> responseBody = new HashMap<>();
-            responseBody.put("commentId", commentId);
-            responseBody.put("message", "Comment created successfully");
+            // Convert DynamoDB item to Comment object
+            Map<String, AttributeValue> item = getItemResponse.item();
+            Comment comment = new Comment();
+            comment.setCommentId(item.get("commentId").s());
+            comment.setTaskId(item.get("taskId").s());
+            comment.setUserId(item.get("userId").s());
+            comment.setContent(item.get("content").s());
+            comment.setCreatedAt(LocalDateTime.parse(item.get("createdAt").s()));
+            comment.setUpdatedAt(LocalDateTime.parse(item.get("updatedAt").s()));
 
-            return createResponse(200, objectMapper.writeValueAsString(responseBody));
+            // Return the comment
+            return createResponse(200, objectMapper.writeValueAsString(comment));
 
         } catch (JsonProcessingException e) {
-            return createResponse(400, "Invalid JSON format in request body");
+            return createResponse(400, "Error processing JSON: " + e.getMessage());
         } catch (DynamoDbException e) {
             context.getLogger().log("DynamoDB error: " + e.getMessage());
-            return createResponse(500, "Failed to create comment: " + e.getMessage());
+            return createResponse(500, "Failed to retrieve comment: " + e.getMessage());
         } catch (Exception e) {
             context.getLogger().log("Unexpected error: " + e.getMessage());
             return createResponse(500, "Unexpected error occurred");

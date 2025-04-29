@@ -42,7 +42,7 @@ public class TaskUtils {
 
         // Add completedAt if present
         if (task.getCompletedAt() != null) {
-            item.put("completedAt", AttributeValue.fromS(task.getCompletedAt().format(DATE_FORMATTER)));
+            item.put("completed_at", AttributeValue.fromS(task.getCompletedAt().format(DATE_FORMATTER)));
         }
 
         PutItemRequest request = PutItemRequest.builder()

@@ -1,6 +1,7 @@
 package com.amalitechtaskmanager.handlers.task;
 import com.amalitechtaskmanager.factories.DynamoDbFactory;
 import com.amalitechtaskmanager.factories.ObjectMapperFactory;
+import com.amalitechtaskmanager.utils.AuthorizerUtil;
 import com.amalitechtaskmanager.utils.DynamoFilterUtil;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
@@ -14,13 +15,25 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.amalitechtaskmanager.constants.StringConstants.TABLE_NAME;
+import static com.amalitechtaskmanager.utils.ApiResponseUtil.createResponse;
 import static com.amalitechtaskmanager.utils.AttributeValueConverter.attributeValueToSimpleValue;
 
 public class AdminGetAllTasks  implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
 
+
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent requestEvent, Context context) {
+
+        String idToken = requestEvent.getHeaders().get("Authorization");
+
+        if (idToken == null) {
+            return createResponse(401, "Unauthorized-Missing Header");
+        }
+
+        if (!AuthorizerUtil.authorize(idToken)){
+            return createResponse(401, "not authorized to perform this operation");
+        }
 
         Map<String,String> queryParams= requestEvent.getQueryStringParameters();
 

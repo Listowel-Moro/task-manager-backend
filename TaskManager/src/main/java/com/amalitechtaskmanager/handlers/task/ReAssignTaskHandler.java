@@ -8,8 +8,6 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import com.amalitechtaskmanager.model.Task;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
-import com.amalitechtaskmanager.factories.DynamoDbFactory;
 import com.amalitechtaskmanager.factories.ObjectMapperFactory;
 
 import java.time.LocalDateTime;
@@ -24,8 +22,7 @@ public class ReAssignTaskHandler implements RequestHandler<APIGatewayProxyReques
     //private final SnsClient snsClient = SNSClientFactory.getSnsClient();
     public static final String TABLE_NAME = System.getenv("TASKS_TABLE");
     private static final ObjectMapper objectMapper = ObjectMapperFactory.getMapper();
-    private final DynamoDbClient dbClient = DynamoDbFactory.getClient();
-    private final String TOPIC_ARN = "arn:aws:sns:us-east-1:123456789012:TaskNotificationTopic";
+    private final String TASK_ASSIGNMENT_TOPIC_ARN = System.getenv("TASK_ASSIGNMENT_TOPIC_ARN");
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent event, Context context) {
@@ -53,16 +50,17 @@ public class ReAssignTaskHandler implements RequestHandler<APIGatewayProxyReques
             }
             TaskUtils.updateTask(task, TABLE_NAME);
 
-            String message = String.format(
-                    "{ \"eventType\": \"TaskReassigned\", \"taskId\": \"%s\", \"oldAssignee\": \"%s\", \"newAssignee\": \"%s\" }",
-                    taskId, oldUserId, newUserId);
-            String subject = "Task Reassigned: " + task.getName();
-            sendEmailNotification(TOPIC_ARN, task.getTaskId(), subject, message);
-            sendEmailNotification(TOPIC_ARN, oldUserId, subject, message);
-//            notifyUser(oldUserId, message);
-//            notifyUser(newUserId, message);
+            // Send notification to new assignee
+            String newAssigneeMessage = createNewAssigneeEmail(task, oldUserId);
+            String newAssigneeSubject = "New Task Assignment: " + task.getName();
+            sendEmailNotification(TASK_ASSIGNMENT_TOPIC_ARN, newUserId, newAssigneeSubject, newAssigneeMessage);
 
-            return createResponse(200, message);
+            // Send notification to previous assignee
+            String previousAssigneeMessage = createPreviousAssigneeEmail(task, newUserId);
+            String previousAssigneeSubject = "Task Reassignment: " + task.getName();
+            sendEmailNotification(TASK_ASSIGNMENT_TOPIC_ARN, oldUserId, previousAssigneeSubject, previousAssigneeMessage);
+
+            return createResponse(200, "Task reassigned successfully");
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -70,17 +68,63 @@ public class ReAssignTaskHandler implements RequestHandler<APIGatewayProxyReques
         }
     }
 
+    private String createNewAssigneeEmail(Task task, String previousAssignee) {
+        return String.format("""
+            Dear Team Member,
+            
+            A task has been assigned to you:
+            
+            Task Details:
+            -------------
+            Name: %s
+            ID: %s
+            Description: %s
+            Status: %s
+            Deadline: %s
+            
+            Action Required:
+            ---------------
+            Please review this task and begin work on it at your earliest convenience. 
+            If you have any questions or concerns about this assignment, please contact your supervisor.
+            
+            You can view the complete task details by logging into the Task Management System.
+            
+            Best regards,
+            Task Management System
+            """,
+            task.getName(),
+            task.getTaskId(),
+            task.getDescription(),
+            task.getStatus(),
+            task.getDeadline()
+        );
+    }
 
-//    private void notifyUser(String userId, String message) {
-//        snsClient.publish(PublishRequest.builder()
-//                .topicArn(TOPIC_ARN)
-//                .message(message)
-//                .messageAttributes(Map.of(
-//                        "user_id", MessageAttributeValue.builder()
-//                                .dataType("String")
-//                                .stringValue(userId)
-//                                .build()
-//                ))
-//                .build());
-//    }
+    private String createPreviousAssigneeEmail(Task task, String newAssignee) {
+        return String.format("""
+            Dear Team Member,
+            
+            A task previously assigned to you has been reassigned:
+            
+            Task Details:
+            -------------
+            Name: %s
+            ID: %s
+            New Assignee: %s
+            Description: %s
+            
+            If you have any ongoing work or documentation related to this task, 
+            please ensure it is properly handed over to the new assignee.
+            
+            If you have any questions about this reassignment, please contact your supervisor.
+            
+            Best regards,
+            Task Management System
+            """,
+            task.getName(),
+            task.getTaskId(),
+            newAssignee,
+            task.getDescription()
+        );
+    }
 }

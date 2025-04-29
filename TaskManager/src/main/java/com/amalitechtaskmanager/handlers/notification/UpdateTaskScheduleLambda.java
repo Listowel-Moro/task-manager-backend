@@ -12,10 +12,8 @@ import com.amazonaws.services.lambda.runtime.events.models.dynamodb.AttributeVal
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.scheduler.SchedulerClient;
-
-import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+
 import java.util.*;
 
 public class UpdateTaskScheduleLambda implements RequestHandler<DynamodbEvent, NotificationResponse> {
@@ -45,7 +43,6 @@ public class UpdateTaskScheduleLambda implements RequestHandler<DynamodbEvent, N
 
         for (DynamodbStreamRecord record : event.getRecords()) {
             if (!"MODIFY".equals(record.getEventName())) {
-                logger.debug("Skipping non-MODIFY event: {}", record.getEventName());
                 continue;
             }
 
@@ -55,7 +52,6 @@ public class UpdateTaskScheduleLambda implements RequestHandler<DynamodbEvent, N
 
                 Optional<Task> optionalTask = DynamoDbUtils.parseTask(newImage);
                 if (optionalTask.isEmpty()) {
-                    logger.warn("Failed to parse task object from newImage");
                     errors.add("Failed to parse task object from newImage");
                     continue;
                 }
@@ -63,12 +59,11 @@ public class UpdateTaskScheduleLambda implements RequestHandler<DynamodbEvent, N
                 Task task = optionalTask.get();
                 String taskId = task.getTaskId();
                 if (taskId == null) {
-                    logger.warn("Missing taskId in task");
                     errors.add("Missing taskId in task");
                     continue;
                 }
 
-                logger.info("Processing MODIFY event for taskId: {}", taskId);
+
 
                 // Check task status
                 String status = Optional.ofNullable(newImage.get("status"))
@@ -83,7 +78,6 @@ public class UpdateTaskScheduleLambda implements RequestHandler<DynamodbEvent, N
                 Optional<String> oldAssignee = SchedulerUtils.getAttributeValue(oldImage.get("userId"));
 
                 if (newDeadlineStr.isEmpty()) {
-                    logger.warn("Missing deadline for taskId: {}", taskId);
                     schedulerUtils.deleteSchedule(taskId);
                     errors.add("Missing deadline for taskId: " + taskId);
                     continue;
@@ -93,7 +87,6 @@ public class UpdateTaskScheduleLambda implements RequestHandler<DynamodbEvent, N
                 boolean assigneeChanged = !newAssignee.equals(oldAssignee);
 
                 if (!deadlineChanged && !assigneeChanged) {
-                    logger.debug("No relevant changes for taskId: {}", taskId);
                     continue;
                 }
 
@@ -116,15 +109,15 @@ public class UpdateTaskScheduleLambda implements RequestHandler<DynamodbEvent, N
 
                 if (!ACTIVE_STATUS.equals(status)) {
                     schedulerUtils.deleteSchedule(taskId);
-                    logger.info("Deleted schedule for taskId: {} due to status '{}'", taskId, status);
+
                     continue;
                 }
 
                 schedulerUtils.deleteSchedule(taskId);
-                logger.info("Deleted previous schedule for taskId: {}", taskId);
+
 
                 schedulerUtils.createSchedule(taskId, reminderTime, newImage, TARGET_LAMBDA_ARN, SCHEDULER_ROLE_ARN);
-                logger.info("Created new schedule for taskId: {} at {}", taskId, reminderTime);
+
                 updatedCount++;
 
             } catch (Exception e) {
