@@ -13,6 +13,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import java.util.HashMap;
 import java.util.Map;
+import static com.amalitechtaskmanager.utils.ApiResponseUtil.createResponse;
+
 
 public class DeleteCommentHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
@@ -62,15 +64,10 @@ public class DeleteCommentHandler implements RequestHandler<APIGatewayProxyReque
             return createResponse(400, "Invalid JSON format in request body");
         } catch (DynamoDbException e) {
             context.getLogger().log("DynamoDB error: " + e.getMessage());
-            return new APIGatewayProxyResponseEvent()
-                    .withStatusCode(200)
-                    .withBody(objectMapper.writeValueAsString(responseBody))
-                    .withHeaders(Map.of("Content-Type", "application/json"));
+            return createResponse(500, "Failed to delete comment: " + e.getMessage());
         } catch (Exception e) {
             context.getLogger().log("Unexpected error: " + e.getMessage());
-            return new APIGatewayProxyResponseEvent()
-                    .withStatusCode(500)
-                    .withBody("{\"error\": \"" + e.getMessage() + "\"}");
+            return createResponse(500, "Unexpected error occurred");
         }
     }
 
