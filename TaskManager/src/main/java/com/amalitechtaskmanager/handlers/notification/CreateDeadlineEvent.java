@@ -48,14 +48,12 @@ public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Notifi
         for (DynamodbStreamRecord record : event.getRecords()) {
             String eventName = record.getEventName();
             if (!"INSERT".equals(eventName)) {
-                logger.debug("Skipping event: {}", eventName);
                 continue;
             }
 
             try {
                 Map<String, AttributeValue> newImage = record.getDynamodb().getNewImage();
                 if (newImage == null) {
-                    logger.warn("No newImage found for {} event", eventName);
                     errors.add("No newImage found for " + eventName + " event");
                     continue;
                 }
@@ -66,23 +64,18 @@ public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Notifi
                         () -> logger.warn("Failed to parse task object from record")
                 );
                 if (optionalTask.isEmpty()) {
-                    logger.warn("Failed to parse task object from record");
                     errors.add("Failed to parse task object from record");
                     continue;
                 }
 
                 Task task = optionalTask.get();
                 if (task.getTaskId() == null) {
-                    logger.warn("taskId missing in task object");
                     errors.add("taskId missing in task object");
                     continue;
                 }
 
-                logger.info("Processing {} event for taskId: {}", eventName, task.getTaskId());
-
                 LocalDateTime deadline = task.getDeadline();
                 if (deadline == null) {
-                    logger.warn("No deadline found for taskId: {}", task.getTaskId());
                     errors.add("No deadline found for taskId: " + task.getTaskId());
                     continue;
                 }
@@ -91,16 +84,11 @@ public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Notifi
                 OffsetDateTime now = OffsetDateTime.now();
 
                 if (reminderTime.isBefore(now)) {
-                    logger.warn("Reminder time {} is in the past for taskId: {}", reminderTime, task.getTaskId());
-                    errors.add("Reminder time " + reminderTime + " is in the past for taskId: " + task.getTaskId());
+                   errors.add("Reminder time " + reminderTime + " is in the past for taskId: " + task.getTaskId());
                     continue;
                 }
-
-                logger.info("Creating schedule for taskId: {} at {}", task.getTaskId(), reminderTime);
-
                 schedulerUtils.createSchedule(task.getTaskId(),reminderTime, newImage, TARGET_LAMBDA_ARN, SCHEDULER_ROLE_ARN);
                 processedRecords++;
-                logger.debug("Record details: {}", newImage);
 
             } catch (Exception e) {
                 logger.error("Error processing record: {}", e.getMessage(), e);
