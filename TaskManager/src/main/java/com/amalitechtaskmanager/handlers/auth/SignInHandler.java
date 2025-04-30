@@ -54,7 +54,7 @@ public class SignInHandler implements RequestHandler<APIGatewayProxyRequestEvent
         APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
         Map<String, String> headers = new HashMap<>();
         headers.put("Content-Type", "application/json");
-        headers.put("Access-Control-Allow-Origin", "https://develop.d4p44endo1tru.amplifyapp.com");  // For production, replace with your specific domain
+        headers.put("Access-Control-Allow-Origin", "http://localhost:8080");  // For production, replace with your specific domain
         headers.put("Access-Control-Allow-Methods", "OPTIONS,POST,GET");
         headers.put("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token");
         headers.put("Access-Control-Allow-Credentials", "true");
@@ -305,9 +305,9 @@ public class SignInHandler implements RequestHandler<APIGatewayProxyRequestEvent
             response.setStatusCode(statusCode);
             response.setBody(objectMapper.writeValueAsString(errorResponse));
         } catch (Exception e) {
-//            response.setStatusCode(500);
-//            response.setBody("{\"error\": \"Internal server error\"}");
-            createResponse(500, "{\"error\": \"Internal server error\"}");
+            response.setStatusCode(500);
+            response.setBody("{\"error\": \"Internal server error\"}");
+//            createResponse(500, "{\"error\": \"Internal server error\"}");
         }
         return response;
     }
