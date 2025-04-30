@@ -13,6 +13,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import java.util.HashMap;
 import java.util.Map;
+import static com.amalitechtaskmanager.utils.ApiResponseUtil.createResponse;
+
 
 public class DeleteCommentHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
@@ -68,17 +70,4 @@ public class DeleteCommentHandler implements RequestHandler<APIGatewayProxyReque
             return createResponse(500, "Unexpected error occurred");
         }
     }
-
-    private APIGatewayProxyResponseEvent createResponse(int statusCode, String body) {
-        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
-        response.setStatusCode(statusCode);
-        response.setBody(body);
-
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Content-Type", "application/json");
-        response.setHeaders(headers);
-
-        return response;
-    }
-
 }

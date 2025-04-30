@@ -1,4 +1,5 @@
 package com.amalitechtaskmanager.handlers.task;
+
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -39,45 +40,38 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
     public CreateTaskHandler() {
         this.schedulerUtils = new SchedulerUtils(schedulerClient);
     }
+
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
         try {
-
             String idToken = input.getHeaders().get("Authorization");
 
             if (idToken == null) {
-                return createResponse(401, "Unauthorized-Missing Header");
+                return createResponse(401, "{\"error\": \"Unauthorized-Missing Header\"}");
             }
 
             if (idToken.startsWith("Bearer")) {
                 idToken = idToken.substring(7);
             }
 
-
             if (!isUserInAdminGroup(idToken)) {
-                return createResponse(403, "Forbidden-User not authorized for this operation");
+                return createResponse(403, "{\"error\": \"Forbidden-User not authorized for this operation\"}");
             }
-
-
-
 
             Task task = objectMapper.readValue(input.getBody(), Task.class);
             if (task.getName() == null || task.getName().isEmpty() ||
-                task.getDeadline() == null  ||
-                task.getUserId() == null || task.getUserId().isEmpty()) {
-                return new APIGatewayProxyResponseEvent()
-                        .withStatusCode(400)
-                        .withBody("{\"error\": \"Name, deadline, and userId are required\"}");
+                    task.getDeadline() == null ||
+                    task.getUserId() == null || task.getUserId().isEmpty()) {
+                return createResponse(400, "{\"error\": \"Name, deadline, and userId are required\"}");
             }
+
             task.setTaskId(UUID.randomUUID().toString());
             task.setStatus(TaskStatus.OPEN);
             task.setDescription(task.getDescription() != null ? task.getDescription() : "");
             task.setCreatedAt(LocalDateTime.now());
-            // Store task in DynamoDB
-            context.getLogger().log("Queue URL: " + taskAssignmentQueue);
 
-            DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
-            String createdAt=task.getCreatedAt().format(formatter);
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+            String createdAt = task.getCreatedAt().format(formatter);
 
             Map<String, AttributeValue> item = new HashMap<>();
             item.put("taskId", AttributeValue.builder().s(task.getTaskId()).build());
@@ -87,10 +81,12 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
             item.put("status", AttributeValue.builder().s(task.getStatus().toString()).build());
             item.put("deadline", AttributeValue.builder().s(task.getDeadline().toString()).build());
             item.put("userId", AttributeValue.builder().s(task.getUserId()).build());
+
             dynamoDbClient.putItem(PutItemRequest.builder()
                     .tableName(tasksTable)
                     .item(item)
                     .build());
+
             // Send task assignment to SQS
             try {
                 sqsClient.sendMessage(SendMessageRequest.builder()
@@ -99,22 +95,15 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
                         .messageGroupId("task-assignments")
                         .build());
                 context.getLogger().log("Message sent to the fifo queue");
-            }
-            catch (Exception e){
+            } catch (Exception e) {
                 context.getLogger().log("SQS Error: " + e.getMessage());
                 throw e;
             }
-            context.getLogger().log("Sending to FIFO queue with messageGroupId: task-assignments");
-            sqsClient.sendMessage(SendMessageRequest.builder()
-                    .queueUrl(taskAssignmentQueue)
-                    .messageBody(objectMapper.writeValueAsString(task))
-                    .messageGroupId("task-assignments")
-                    .build());
 
             // Schedule task expiration at deadline
             boolean scheduledExpiration = false;
             if (taskExpirationLambdaArn != null && !taskExpirationLambdaArn.isEmpty() &&
-                schedulerRoleArn != null && !schedulerRoleArn.isEmpty()) {
+                    schedulerRoleArn != null && !schedulerRoleArn.isEmpty()) {
                 scheduledExpiration = schedulerUtils.scheduleTaskExpiration(task, taskExpirationLambdaArn, schedulerRoleArn);
                 context.getLogger().log("Scheduled expiration for task " + task.getTaskId() + ": " + scheduledExpiration);
             } else {
@@ -125,17 +114,12 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
             responseBody.put("taskId", task.getTaskId());
             responseBody.put("message", "Task created and queued for assignment" +
                     (scheduledExpiration ? ", expiration scheduled" : ""));
-            return new APIGatewayProxyResponseEvent()
-                    .withStatusCode(200)
-                    .withBody(objectMapper.writeValueAsString(responseBody))
-                    .withHeaders(Map.of("Content-Type", "application/json"));
+            return createResponse(200, objectMapper.writeValueAsString(responseBody));
+
         } catch (Exception e) {
             context.getLogger().log("Error: " + e.getMessage());
             context.getLogger().log("Queue URL: " + taskAssignmentQueue);
-
-            return new APIGatewayProxyResponseEvent()
-                    .withStatusCode(500)
-                    .withBody("{\"error\": \"" + e.getMessage() + "\"}");
+            return createResponse(500, "{\"error\": \"" + e.getMessage() + "\"}");
         }
     }
 }

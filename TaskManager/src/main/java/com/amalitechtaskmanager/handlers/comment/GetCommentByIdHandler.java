@@ -14,6 +14,8 @@ import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import static com.amalitechtaskmanager.utils.ApiResponseUtil.createResponse;
+
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -90,15 +92,5 @@ public class GetCommentByIdHandler implements RequestHandler<APIGatewayProxyRequ
         }
     }
 
-    private APIGatewayProxyResponseEvent createResponse(int statusCode, String body) {
-        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
-        response.setStatusCode(statusCode);
-        response.setBody(body);
 
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Content-Type", "application/json");
-        response.setHeaders(headers);
-
-        return response;
-    }
 }

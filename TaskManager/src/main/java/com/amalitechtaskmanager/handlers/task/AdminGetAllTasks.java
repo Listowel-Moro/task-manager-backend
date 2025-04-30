@@ -28,11 +28,11 @@ public class AdminGetAllTasks  implements RequestHandler<APIGatewayProxyRequestE
         String idToken = requestEvent.getHeaders().get("Authorization");
 
         if (idToken == null) {
-            return createResponse(401, "Unauthorized-Missing Header");
+            return createResponse(401, "{\"error\": \"Not authorized to perform this operation\"}");
         }
 
         if (!AuthorizerUtil.authorize(idToken)){
-            return createResponse(401, "not authorized to perform this operation");
+            return createResponse(401, "{\"error\": \"Not authorized to perform this operation\"}");
         }
 
         Map<String,String> queryParams= requestEvent.getQueryStringParameters();
@@ -50,14 +50,10 @@ try {
                     )))
             .toList();
 
-    return new APIGatewayProxyResponseEvent()
-            .withStatusCode(200)
-            .withBody(ObjectMapperFactory.getMapper().writeValueAsString(result));
+    return createResponse(200, ObjectMapperFactory.getMapper().writeValueAsString(result));
 
 } catch (Exception e) {
-    return  new APIGatewayProxyResponseEvent()
-            .withStatusCode(500)
-            .withBody("{\"error\": \"" + e.getMessage() + "\"}");
+    return createResponse(500, "{\"error\": \"" + e.getMessage() + "\"}");
 }
 
 
