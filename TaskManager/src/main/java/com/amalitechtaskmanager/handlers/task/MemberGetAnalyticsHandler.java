@@ -23,7 +23,7 @@ public class MemberGetAnalyticsHandler  implements RequestHandler<APIGatewayProx
 
         String userId= requestEvent.getPathParameters().get("userId");
         if(userId==null||userId.isEmpty()) {
-            return createResponse(433,"ID require");
+            return createResponse(requestEvent, 433,"ID require");
         }
 
         try {
@@ -62,11 +62,11 @@ public class MemberGetAnalyticsHandler  implements RequestHandler<APIGatewayProx
             resultMap.put("closed", closed);
 
             String  result= ObjectMapperFactory.getMapper().writeValueAsString(resultMap);
-             return  createResponse(200,result);
+             return  createResponse(requestEvent, 200,result);
 
 
         } catch (Exception e) {
-            return  createResponse(500,"Internal Server Error"+e.getMessage());
+            return  createResponse(requestEvent, 500,"Internal Server Error"+e.getMessage());
         }
 
 

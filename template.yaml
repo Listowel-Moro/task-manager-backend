@@ -91,7 +91,7 @@ Resources:
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization'"
-        AllowOrigin: "'*'"
+        AllowOrigin: "'http://localhost:8080/'"
       Auth:
         DefaultAuthorizer: CognitoAuthorizer
         Authorizers:

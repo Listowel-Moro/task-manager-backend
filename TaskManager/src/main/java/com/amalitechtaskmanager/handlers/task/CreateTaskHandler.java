@@ -47,7 +47,7 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
             String idToken = input.getHeaders().get("Authorization");
 
             if (idToken == null) {
-                return createResponse(401, "{\"error\": \"Unauthorized-Missing Header\"}");
+                return createResponse(input, 401, "{\"error\": \"Unauthorized-Missing Header\"}");
             }
 
             if (idToken.startsWith("Bearer")) {
@@ -55,14 +55,14 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
             }
 
             if (!isUserInAdminGroup(idToken)) {
-                return createResponse(403, "{\"error\": \"Forbidden-User not authorized for this operation\"}");
+                return createResponse(input, 403, "{\"error\": \"Forbidden-User not authorized for this operation\"}");
             }
 
             Task task = objectMapper.readValue(input.getBody(), Task.class);
             if (task.getName() == null || task.getName().isEmpty() ||
                     task.getDeadline() == null ||
                     task.getUserId() == null || task.getUserId().isEmpty()) {
-                return createResponse(400, "{\"error\": \"Name, deadline, and userId are required\"}");
+                return createResponse(input, 400, "{\"error\": \"Name, deadline, and userId are required\"}");
             }
 
             task.setTaskId(UUID.randomUUID().toString());
@@ -114,12 +114,12 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
             responseBody.put("taskId", task.getTaskId());
             responseBody.put("message", "Task created and queued for assignment" +
                     (scheduledExpiration ? ", expiration scheduled" : ""));
-            return createResponse(200, objectMapper.writeValueAsString(responseBody));
+            return createResponse(input, 200, objectMapper.writeValueAsString(responseBody));
 
         } catch (Exception e) {
             context.getLogger().log("Error: " + e.getMessage());
             context.getLogger().log("Queue URL: " + taskAssignmentQueue);
-            return createResponse(500, "{\"error\": \"" + e.getMessage() + "\"}");
+            return createResponse(input, 500, "{\"error\": \"" + e.getMessage() + "\"}");
         }
     }
 }

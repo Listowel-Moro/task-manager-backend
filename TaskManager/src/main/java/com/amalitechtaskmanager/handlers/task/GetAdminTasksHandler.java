@@ -4,27 +4,26 @@ import com.amalitechtaskmanager.factories.DynamoDbFactory;
 import com.amalitechtaskmanager.factories.ObjectMapperFactory;
 import com.amalitechtaskmanager.utils.ApiResponseUtil;
 import com.amalitechtaskmanager.utils.AuthorizerUtil;
-import com.amalitechtaskmanager.utils.DynamoFilterUtil;
-import com.amalitechtaskmanager.utils.DynamoDbUtils;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
-import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
-import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
-import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
+import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static com.amalitechtaskmanager.constants.StringConstants.TABLE_NAME;
 import static com.amalitechtaskmanager.utils.ApiResponseUtil.createResponse;
 import static com.amalitechtaskmanager.utils.AttributeValueConverter.attributeValueToSimpleValue;
-import static com.amalitechtaskmanager.utils.CheckUserRoleUtil.isUserInAdminGroup;
 
 public class GetAdminTasksHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     private static final Logger logger = LoggerFactory.getLogger(GetAdminTasksHandler.class);
@@ -38,11 +37,11 @@ public class GetAdminTasksHandler implements RequestHandler<APIGatewayProxyReque
 
 
         if (idToken == null) {
-            return createResponse(401, "Unauthorized-Missing Header");
+            return createResponse(request, 401, "Unauthorized-Missing Header");
         }
 
         if (!AuthorizerUtil.authorize(idToken)){
-            return createResponse(403, "not authorized to perform this operation");
+            return createResponse(request, 403, "not authorized to perform this operation");
         }
 
 
@@ -67,11 +66,11 @@ public class GetAdminTasksHandler implements RequestHandler<APIGatewayProxyReque
             String responseBody = mapper.writeValueAsString(result);
             logger.info("Successfully retrieved {} tasks", result.size());
 
-            return ApiResponseUtil.createResponse(200, responseBody);
+            return ApiResponseUtil.createResponse(request, 200, responseBody);
 
         } catch (Exception e) {
             logger.error("Error processing admin tasks request: {}", e.getMessage(), e);
-            return ApiResponseUtil.createResponse(500,
+            return ApiResponseUtil.createResponse(request, 500,
                     String.format("{\"error\": \"Failed to retrieve tasks: %s\"}", e.getMessage()));
         }
     }
