@@ -31,7 +31,7 @@ public class ForgotPasswordHandler implements RequestHandler<APIGatewayProxyRequ
             String email = requestBody.get("email");
 
             if (email == null) {
-                return ApiResponseUtil.createResponse(400, "{\"message\": \"Email is required\"}");
+                return ApiResponseUtil.createResponse(input, 400, "{\"message\": \"Email is required\"}");
             }
 
             // Create forgot password request
@@ -48,15 +48,15 @@ public class ForgotPasswordHandler implements RequestHandler<APIGatewayProxyRequ
             responseBody.put("deliveryMedium", forgotPasswordResponse.codeDeliveryDetails().deliveryMedium());
             responseBody.put("destination", forgotPasswordResponse.codeDeliveryDetails().destination());
 
-            return ApiResponseUtil.createResponse(200, objectMapper.writeValueAsString(responseBody));
+            return ApiResponseUtil.createResponse(input, 200, objectMapper.writeValueAsString(responseBody));
 
         } catch (UserNotFoundException e) {
             context.getLogger().log("User not found: " + e.getMessage());
             // For security reasons, don't reveal that the user doesn't exist
-            return ApiResponseUtil.createResponse(200, "{\"message\": \"If the email exists, a password reset code has been sent\"}");
+            return ApiResponseUtil.createResponse(input, 200, "{\"message\": \"If the email exists, a password reset code has been sent\"}");
         } catch (Exception e) {
             context.getLogger().log("Error in forgot password flow: " + e.getMessage());
-            return ApiResponseUtil.createResponse(500, "{\"message\": \"Error initiating password reset: " + e.getMessage() + "\"}");
+            return ApiResponseUtil.createResponse(input, 500, "{\"message\": \"Error initiating password reset: " + e.getMessage() + "\"}");
         }
     }
 }

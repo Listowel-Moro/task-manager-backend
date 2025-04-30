@@ -32,7 +32,7 @@ public class ConfirmForgotPasswordHandler implements RequestHandler<APIGatewayPr
             String newPassword = requestBody.get("newPassword");
 
             if (email == null || confirmationCode == null || newPassword == null) {
-                return ApiResponseUtil.createResponse(400, "{\"message\": \"Email, confirmation code, and new password are required\"}");
+                return ApiResponseUtil.createResponse(input, 400, "{\"message\": \"Email, confirmation code, and new password are required\"}");
             }
 
             // Create confirm forgot password request
@@ -46,20 +46,20 @@ public class ConfirmForgotPasswordHandler implements RequestHandler<APIGatewayPr
             // Confirm password reset
             cognitoClient.confirmForgotPassword(confirmRequest);
 
-            return ApiResponseUtil.createResponse(200, "{\"message\": \"Password reset successful\"}");
+            return ApiResponseUtil.createResponse(input, 200, "{\"message\": \"Password reset successful\"}");
 
         } catch (CodeMismatchException e) {
             context.getLogger().log("Invalid confirmation code: " + e.getMessage());
-            return ApiResponseUtil.createResponse(400, "{\"message\": \"Invalid confirmation code\"}");
+            return ApiResponseUtil.createResponse(input, 400, "{\"message\": \"Invalid confirmation code\"}");
         } catch (ExpiredCodeException e) {
             context.getLogger().log("Expired code: " + e.getMessage());
-            return ApiResponseUtil.createResponse(400, "{\"message\": \"Confirmation code has expired\"}");
+            return ApiResponseUtil.createResponse(input, 400, "{\"message\": \"Confirmation code has expired\"}");
         } catch (InvalidPasswordException e) {
             context.getLogger().log("Invalid password: " + e.getMessage());
-            return ApiResponseUtil.createResponse(400, "{\"message\": \"Password does not meet requirements: " + e.getMessage() + "\"}");
+            return ApiResponseUtil.createResponse(input, 400, "{\"message\": \"Password does not meet requirements: " + e.getMessage() + "\"}");
         } catch (Exception e) {
             context.getLogger().log("Error confirming password reset: " + e.getMessage());
-            return ApiResponseUtil.createResponse(500, "{\"message\": \"Error resetting password: " + e.getMessage() + "\"}");
+            return ApiResponseUtil.createResponse(input, 500, "{\"message\": \"Error resetting password: " + e.getMessage() + "\"}");
         }
     }
 }
