@@ -70,6 +70,4 @@ public class DeleteCommentHandler implements RequestHandler<APIGatewayProxyReque
             return createResponse(input, 500, "Unexpected error occurred");
         }
     }
-
-
 }

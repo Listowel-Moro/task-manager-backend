@@ -18,6 +18,8 @@ import java.util.Map;
 import java.util.logging.Logger;
 import java.util.UUID;
 
+import static com.amalitechtaskmanager.utils.ApiResponseUtil.createResponse;
+
 public class SignInHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     private final CognitoIdentityProviderClient cognitoClient;
     private final SfnClient sfnClient;
@@ -303,8 +305,9 @@ public class SignInHandler implements RequestHandler<APIGatewayProxyRequestEvent
             response.setStatusCode(statusCode);
             response.setBody(objectMapper.writeValueAsString(errorResponse));
         } catch (Exception e) {
-            response.setStatusCode(500);
-            response.setBody("{\"error\": \"Internal server error\"}");
+//            response.setStatusCode(500);
+//            response.setBody("{\"error\": \"Internal server error\"}");
+            createResponse(500, "{\"error\": \"Internal server error\"}");
         }
         return response;
     }

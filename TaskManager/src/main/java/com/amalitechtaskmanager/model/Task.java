@@ -95,12 +95,12 @@ public class Task {
     }
 
 
-    public void setCompletedAt(LocalDateTime completedAt) {
-        if (completedAt != null && this.status != TaskStatus.COMPLETED) {
-            throw new CannotSetCompletedAtException("Cannot set completedAt unless status is COMPLETED");
-        }
-        this.completedAt = completedAt;
-    }
+//    public void setCompletedAt(LocalDateTime completedAt) {
+//        if (completedAt != null && this.status != TaskStatus.COMPLETED) {
+//            throw new CannotSetCompletedAtException("Cannot set completedAt unless status is COMPLETED");
+//        }
+//        this.completedAt = completedAt;
+//    }
 
     /**
      * Marks a task as expired
