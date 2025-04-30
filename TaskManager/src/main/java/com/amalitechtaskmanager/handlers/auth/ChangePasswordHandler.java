@@ -1,4 +1,3 @@
-// ChangePasswordHandler.java
 package com.amalitechtaskmanager.handlers.auth;
 
 import com.amazonaws.services.lambda.runtime.Context;
@@ -8,8 +7,8 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.fasterxml.jackson.databind.ObjectMapper;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.*;
+import com.amalitechtaskmanager.utils.ApiResponseUtil;
 
-import java.util.HashMap;
 import java.util.Map;
 
 public class ChangePasswordHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
@@ -23,9 +22,6 @@ public class ChangePasswordHandler implements RequestHandler<APIGatewayProxyRequ
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
-        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
-        response.setHeaders(Map.of("Content-Type", "application/json"));
-
         try {
             // Parse request body
             Map<String, String> requestBody = objectMapper.readValue(input.getBody(), Map.class);
@@ -34,9 +30,7 @@ public class ChangePasswordHandler implements RequestHandler<APIGatewayProxyRequ
             String newPassword = requestBody.get("newPassword");
 
             if (accessToken == null || previousPassword == null || newPassword == null) {
-                response.setStatusCode(400);
-                response.setBody("{\"message\": \"Access token, previous password, and new password are required\"}");
-                return response;
+                return ApiResponseUtil.createResponse(400, "{\"message\": \"Access token, previous password, and new password are required\"}");
             }
 
             // Create change password request
@@ -49,23 +43,17 @@ public class ChangePasswordHandler implements RequestHandler<APIGatewayProxyRequ
             // Change the password
             cognitoClient.changePassword(changePasswordRequest);
 
-            response.setStatusCode(200);
-            response.setBody("{\"message\": \"Password changed successfully\"}");
+            return ApiResponseUtil.createResponse(200, "{\"message\": \"Password changed successfully\"}");
 
         } catch (NotAuthorizedException e) {
             context.getLogger().log("Authentication error: " + e.getMessage());
-            response.setStatusCode(401);
-            response.setBody("{\"message\": \"Incorrect previous password or invalid access token\"}");
+            return ApiResponseUtil.createResponse(401, "{\"message\": \"Incorrect previous password or invalid access token\"}");
         } catch (InvalidPasswordException e) {
             context.getLogger().log("Invalid password: " + e.getMessage());
-            response.setStatusCode(400);
-            response.setBody("{\"message\": \"Password does not meet requirements: " + e.getMessage() + "\"}");
+            return ApiResponseUtil.createResponse(400, "{\"message\": \"Password does not meet requirements: " + e.getMessage() + "\"}");
         } catch (Exception e) {
             context.getLogger().log("Error changing password: " + e.getMessage());
-            response.setStatusCode(500);
-            response.setBody("{\"message\": \"Error changing password: " + e.getMessage() + "\"}");
+            return ApiResponseUtil.createResponse(500, "{\"message\": \"Error changing password: " + e.getMessage() + "\"}");
         }
-
-        return response;
     }
 }

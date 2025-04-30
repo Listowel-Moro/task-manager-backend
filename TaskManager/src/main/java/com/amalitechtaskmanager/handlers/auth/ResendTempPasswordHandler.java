@@ -8,9 +8,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.*;
 import software.amazon.awssdk.regions.Region;
+import com.amalitechtaskmanager.utils.ApiResponseUtil;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -38,22 +38,12 @@ public class ResendTempPasswordHandler implements RequestHandler<APIGatewayProxy
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
-        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Content-Type", "application/json");
-        headers.put("Access-Control-Allow-Origin", "*");
-        response.setHeaders(headers);
-//
         try {
             // Verify that the caller is an admin
             String authToken = input.getHeaders().get("Authorization");
             if (authToken == null || authToken.isEmpty()) {
                 context.getLogger().log("Missing Authorization header");
-                Map<String, String> errorResponse = new HashMap<>();
-                errorResponse.put("error", "Unauthorized - Missing authentication");
-                response.setStatusCode(401);
-                response.setBody(objectMapper.writeValueAsString(errorResponse));
-                return response;
+                return ApiResponseUtil.createResponse(401, "{\"error\": \"Unauthorized - Missing authentication\"}");
             }
 
             // Extract the token from the header (remove "Bearer " prefix if present)
@@ -65,20 +55,12 @@ public class ResendTempPasswordHandler implements RequestHandler<APIGatewayProxy
             // Get the user from the token
             String callerUsername = getUsernameFromToken(token, context);
             if (callerUsername == null) {
-                Map<String, String> errorResponse = new HashMap<>();
-                errorResponse.put("error", "Invalid authentication token");
-                response.setStatusCode(401);
-                response.setBody(objectMapper.writeValueAsString(errorResponse));
-                return response;
+                return ApiResponseUtil.createResponse(401, "{\"error\": \"Invalid authentication token\"}");
             }
 
             // Check if the caller is an admin
             if (!isUserInAdminGroup(callerUsername, context)) {
-                Map<String, String> errorResponse = new HashMap<>();
-                errorResponse.put("error", "Forbidden - Admin privileges required");
-                response.setStatusCode(403);
-                response.setBody(objectMapper.writeValueAsString(errorResponse));
-                return response;
+                return ApiResponseUtil.createResponse(403, "{\"error\": \"Forbidden - Admin privileges required\"}");
             }
 
             // Parse request body to get the target username
@@ -87,11 +69,7 @@ public class ResendTempPasswordHandler implements RequestHandler<APIGatewayProxy
 
             if (targetUsername == null || targetUsername.trim().isEmpty()) {
                 context.getLogger().log("Missing username parameter");
-                Map<String, String> errorResponse = new HashMap<>();
-                errorResponse.put("error", "Missing required parameter: username");
-                response.setStatusCode(400);
-                response.setBody(objectMapper.writeValueAsString(errorResponse));
-                return response;
+                return ApiResponseUtil.createResponse(400, "{\"error\": \"Missing required parameter: username\"}");
             }
 
             context.getLogger().log("Admin " + callerUsername + " is resending temporary password for user: " + targetUsername);
@@ -125,70 +103,30 @@ public class ResendTempPasswordHandler implements RequestHandler<APIGatewayProxy
                 responseBody.put("status", "success");
                 responseBody.put("message", "Temporary password has been reset");
                 responseBody.put("tempPassword", tempPassword); // For development/testing only
-                response.setStatusCode(200);
-                response.setBody(objectMapper.writeValueAsString(responseBody));
-
                 context.getLogger().log("Temporary password reset successfully for user: " + targetUsername);
+                return ApiResponseUtil.createResponse(200, objectMapper.writeValueAsString(responseBody));
+
             } catch (UserNotFoundException e) {
                 throw e; // Re-throw to be caught by the outer catch block
             }
 
         } catch (UserNotFoundException e) {
             context.getLogger().log("User not found: " + e.getMessage());
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("error", "User not found");
-            response.setStatusCode(404);
-            try {
-                response.setBody(objectMapper.writeValueAsString(errorResponse));
-            } catch (Exception ex) {
-                response.setBody("{\"error\": \"User not found\"}");
-            }
+            return ApiResponseUtil.createResponse(404, "{\"error\": \"User not found\"}");
         } catch (NotAuthorizedException e) {
             context.getLogger().log("Not authorized: " + e.getMessage());
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("error", "Invalid or expired authentication");
-            response.setStatusCode(401);
-            try {
-                response.setBody(objectMapper.writeValueAsString(errorResponse));
-            } catch (Exception ex) {
-                response.setBody("{\"error\": \"Not authorized\"}");
-            }
+            return ApiResponseUtil.createResponse(401, "{\"error\": \"Invalid or expired authentication\"}");
         } catch (LimitExceededException e) {
             context.getLogger().log("Limit exceeded: " + e.getMessage());
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("error", "Too many attempts. Please try again later.");
-            response.setStatusCode(429);
-            try {
-                response.setBody(objectMapper.writeValueAsString(errorResponse));
-            } catch (Exception ex) {
-                response.setBody("{\"error\": \"Too many attempts. Please try again later.\"}");
-            }
+            return ApiResponseUtil.createResponse(429, "{\"error\": \"Too many attempts. Please try again later.\"}");
         } catch (TooManyRequestsException e) {
             context.getLogger().log("Too many requests: " + e.getMessage());
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("error", "Rate limit exceeded. Please try again later.");
-            response.setStatusCode(429);
-            try {
-                response.setBody(objectMapper.writeValueAsString(errorResponse));
-            } catch (Exception ex) {
-                response.setBody("{\"error\": \"Rate limit exceeded. Please try again later.\"}");
-            }
+            return ApiResponseUtil.createResponse(429, "{\"error\": \"Rate limit exceeded. Please try again later.\"}");
         } catch (Exception e) {
             context.getLogger().log("Error resetting temporary password: " + e.getMessage());
             e.printStackTrace();
-
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("error", "Failed to reset temporary password: " + e.getMessage());
-
-            response.setStatusCode(500);
-            try {
-                response.setBody(objectMapper.writeValueAsString(errorResponse));
-            } catch (Exception ex) {
-                response.setBody("{\"error\": \"Internal server error\"}");
-            }
+            return ApiResponseUtil.createResponse(500, "{\"error\": \"Failed to reset temporary password: " + e.getMessage() + "\"}");
         }
-
-        return response;
     }
 
     // Helper method to get the username from the JWT token
