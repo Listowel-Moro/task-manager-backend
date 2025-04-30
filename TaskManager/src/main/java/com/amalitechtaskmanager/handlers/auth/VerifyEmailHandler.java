@@ -55,7 +55,7 @@ public class VerifyEmailHandler implements RequestHandler<APIGatewayProxyRequest
 
             if (username == null || code == null) {
                 context.getLogger().log("Missing required parameters");
-                return ApiResponseUtil.createResponse(400, "{\"error\": \"Missing required parameters: username and code\"}");
+                return ApiResponseUtil.createResponse(input, 400, "{\"error\": \"Missing required parameters: username and code\"}");
             }
 
             context.getLogger().log("Verifying email for user: " + username);
@@ -93,7 +93,7 @@ public class VerifyEmailHandler implements RequestHandler<APIGatewayProxyRequest
                 responseBody.put("message", "Email verification successful");
                 responseBody.put("subscriptions", "User was subscribed to all notification topics");
                 responseBody.put("stepFunctionExecutionArn", startExecutionResponse.executionArn());
-                return ApiResponseUtil.createResponse(200, objectMapper.writeValueAsString(responseBody));
+                return ApiResponseUtil.createResponse(input, 200, objectMapper.writeValueAsString(responseBody));
 
             } catch (Exception e) {
                 context.getLogger().log("Failed to start subscription step function: " + e.getMessage());
@@ -103,22 +103,22 @@ public class VerifyEmailHandler implements RequestHandler<APIGatewayProxyRequest
                 responseBody.put("status", "partial_success");
                 responseBody.put("message", "Email verification successful");
                 responseBody.put("subscriptionWarning", "There was an issue with topic subscriptions: " + e.getMessage());
-                return ApiResponseUtil.createResponse(200, objectMapper.writeValueAsString(responseBody));
+                return ApiResponseUtil.createResponse(input, 200, objectMapper.writeValueAsString(responseBody));
             }
 
         } catch (CodeMismatchException e) {
             context.getLogger().log("Invalid verification code: " + e.getMessage());
-            return ApiResponseUtil.createResponse(400, "{\"error\": \"Invalid verification code\"}");
+            return ApiResponseUtil.createResponse(input, 400, "{\"error\": \"Invalid verification code\"}");
         } catch (ExpiredCodeException e) {
             context.getLogger().log("Verification code expired: " + e.getMessage());
-            return ApiResponseUtil.createResponse(400, "{\"error\": \"Verification code expired\"}");
+            return ApiResponseUtil.createResponse(input, 400, "{\"error\": \"Verification code expired\"}");
         } catch (UserNotFoundException e) {
             context.getLogger().log("User not found: " + e.getMessage());
-            return ApiResponseUtil.createResponse(404, "{\"error\": \"User not found\"}");
+            return ApiResponseUtil.createResponse(input, 404, "{\"error\": \"User not found\"}");
         } catch (Exception e) {
             context.getLogger().log("Error verifying email: " + e.getMessage());
             e.printStackTrace();
-            return ApiResponseUtil.createResponse(500, "{\"error\": \"Failed to verify email: " + e.getMessage() + "\"}");
+            return ApiResponseUtil.createResponse(input, 500, "{\"error\": \"Failed to verify email: " + e.getMessage() + "\"}");
         }
     }
 }

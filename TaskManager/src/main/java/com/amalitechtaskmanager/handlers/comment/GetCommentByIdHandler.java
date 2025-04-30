@@ -47,7 +47,7 @@ public class GetCommentByIdHandler implements RequestHandler<APIGatewayProxyRequ
             // Get commentId from path parameters
             Map<String, String> pathParameters = input.getPathParameters();
             if (pathParameters == null || !pathParameters.containsKey("commentId")) {
-                return createResponse(400, "Missing commentId parameter");
+                return createResponse(input, 400, "Missing commentId parameter");
             }
 
             String commentId = pathParameters.get("commentId");
@@ -65,7 +65,7 @@ public class GetCommentByIdHandler implements RequestHandler<APIGatewayProxyRequ
 
             // Check if the item exists
             if (getItemResponse.item() == null || getItemResponse.item().isEmpty()) {
-                return createResponse(404, "Comment not found");
+                return createResponse(input, 404, "Comment not found");
             }
 
             // Convert DynamoDB item to Comment object
@@ -79,16 +79,16 @@ public class GetCommentByIdHandler implements RequestHandler<APIGatewayProxyRequ
             comment.setUpdatedAt(LocalDateTime.parse(item.get("updatedAt").s()));
 
             // Return the comment
-            return createResponse(200, objectMapper.writeValueAsString(comment));
+            return createResponse(input, 200, objectMapper.writeValueAsString(comment));
 
         } catch (JsonProcessingException e) {
-            return createResponse(400, "Error processing JSON: " + e.getMessage());
+            return createResponse(input, 400, "Error processing JSON: " + e.getMessage());
         } catch (DynamoDbException e) {
             context.getLogger().log("DynamoDB error: " + e.getMessage());
-            return createResponse(500, "Failed to retrieve comment: " + e.getMessage());
+            return createResponse(input, 500, "Failed to retrieve comment: " + e.getMessage());
         } catch (Exception e) {
             context.getLogger().log("Unexpected error: " + e.getMessage());
-            return createResponse(500, "Unexpected error occurred");
+            return createResponse(input, 500, "Unexpected error occurred");
         }
     }
 

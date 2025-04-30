@@ -30,7 +30,7 @@ public class ChangePasswordHandler implements RequestHandler<APIGatewayProxyRequ
             String newPassword = requestBody.get("newPassword");
 
             if (accessToken == null || previousPassword == null || newPassword == null) {
-                return ApiResponseUtil.createResponse(400, "{\"message\": \"Access token, previous password, and new password are required\"}");
+                return ApiResponseUtil.createResponse(input, 400, "{\"message\": \"Access token, previous password, and new password are required\"}");
             }
 
             // Create change password request
@@ -43,17 +43,17 @@ public class ChangePasswordHandler implements RequestHandler<APIGatewayProxyRequ
             // Change the password
             cognitoClient.changePassword(changePasswordRequest);
 
-            return ApiResponseUtil.createResponse(200, "{\"message\": \"Password changed successfully\"}");
+            return ApiResponseUtil.createResponse(input, 200, "{\"message\": \"Password changed successfully\"}");
 
         } catch (NotAuthorizedException e) {
             context.getLogger().log("Authentication error: " + e.getMessage());
-            return ApiResponseUtil.createResponse(401, "{\"message\": \"Incorrect previous password or invalid access token\"}");
+            return ApiResponseUtil.createResponse(input, 401, "{\"message\": \"Incorrect previous password or invalid access token\"}");
         } catch (InvalidPasswordException e) {
             context.getLogger().log("Invalid password: " + e.getMessage());
-            return ApiResponseUtil.createResponse(400, "{\"message\": \"Password does not meet requirements: " + e.getMessage() + "\"}");
+            return ApiResponseUtil.createResponse(input, 400, "{\"message\": \"Password does not meet requirements: " + e.getMessage() + "\"}");
         } catch (Exception e) {
             context.getLogger().log("Error changing password: " + e.getMessage());
-            return ApiResponseUtil.createResponse(500, "{\"message\": \"Error changing password: " + e.getMessage() + "\"}");
+            return ApiResponseUtil.createResponse(input, 500, "{\"message\": \"Error changing password: " + e.getMessage() + "\"}");
         }
     }
 }
