@@ -1,4 +1,3 @@
-// ConfirmForgotPasswordHandler.java
 package com.amalitechtaskmanager.handlers.auth;
 
 import com.amazonaws.services.lambda.runtime.Context;
@@ -8,6 +7,7 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.fasterxml.jackson.databind.ObjectMapper;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.*;
+import com.amalitechtaskmanager.utils.ApiResponseUtil;
 
 import java.util.Map;
 
@@ -24,9 +24,6 @@ public class ConfirmForgotPasswordHandler implements RequestHandler<APIGatewayPr
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
-        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
-        response.setHeaders(Map.of("Content-Type", "application/json"));
-
         try {
             // Parse request body
             Map<String, String> requestBody = objectMapper.readValue(input.getBody(), Map.class);
@@ -35,9 +32,7 @@ public class ConfirmForgotPasswordHandler implements RequestHandler<APIGatewayPr
             String newPassword = requestBody.get("newPassword");
 
             if (email == null || confirmationCode == null || newPassword == null) {
-                response.setStatusCode(400);
-                response.setBody("{\"message\": \"Email, confirmation code, and new password are required\"}");
-                return response;
+                return ApiResponseUtil.createResponse(400, "{\"message\": \"Email, confirmation code, and new password are required\"}");
             }
 
             // Create confirm forgot password request
@@ -51,27 +46,20 @@ public class ConfirmForgotPasswordHandler implements RequestHandler<APIGatewayPr
             // Confirm password reset
             cognitoClient.confirmForgotPassword(confirmRequest);
 
-            response.setStatusCode(200);
-            response.setBody("{\"message\": \"Password reset successful\"}");
+            return ApiResponseUtil.createResponse(200, "{\"message\": \"Password reset successful\"}");
 
         } catch (CodeMismatchException e) {
             context.getLogger().log("Invalid confirmation code: " + e.getMessage());
-            response.setStatusCode(400);
-            response.setBody("{\"message\": \"Invalid confirmation code\"}");
+            return ApiResponseUtil.createResponse(400, "{\"message\": \"Invalid confirmation code\"}");
         } catch (ExpiredCodeException e) {
             context.getLogger().log("Expired code: " + e.getMessage());
-            response.setStatusCode(400);
-            response.setBody("{\"message\": \"Confirmation code has expired\"}");
+            return ApiResponseUtil.createResponse(400, "{\"message\": \"Confirmation code has expired\"}");
         } catch (InvalidPasswordException e) {
             context.getLogger().log("Invalid password: " + e.getMessage());
-            response.setStatusCode(400);
-            response.setBody("{\"message\": \"Password does not meet requirements: " + e.getMessage() + "\"}");
+            return ApiResponseUtil.createResponse(400, "{\"message\": \"Password does not meet requirements: " + e.getMessage() + "\"}");
         } catch (Exception e) {
             context.getLogger().log("Error confirming password reset: " + e.getMessage());
-            response.setStatusCode(500);
-            response.setBody("{\"message\": \"Error resetting password: " + e.getMessage() + "\"}");
+            return ApiResponseUtil.createResponse(500, "{\"message\": \"Error resetting password: " + e.getMessage() + "\"}");
         }
-
-        return response;
     }
 }

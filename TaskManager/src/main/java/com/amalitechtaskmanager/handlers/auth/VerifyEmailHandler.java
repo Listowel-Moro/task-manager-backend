@@ -11,6 +11,7 @@ import software.amazon.awssdk.services.sfn.SfnClient;
 import software.amazon.awssdk.services.sfn.model.StartExecutionRequest;
 import software.amazon.awssdk.services.sfn.model.StartExecutionResponse;
 import software.amazon.awssdk.regions.Region;
+import com.amalitechtaskmanager.utils.ApiResponseUtil;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -46,12 +47,6 @@ public class VerifyEmailHandler implements RequestHandler<APIGatewayProxyRequest
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
-        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Content-Type", "application/json");
-        headers.put("Access-Control-Allow-Origin", "*");
-        response.setHeaders(headers);
-
         try {
             // Parse request body
             Map<String, String> requestBody = objectMapper.readValue(input.getBody(), Map.class);
@@ -60,11 +55,7 @@ public class VerifyEmailHandler implements RequestHandler<APIGatewayProxyRequest
 
             if (username == null || code == null) {
                 context.getLogger().log("Missing required parameters");
-                Map<String, String> errorResponse = new HashMap<>();
-                errorResponse.put("error", "Missing required parameters: username and code");
-                response.setStatusCode(400);
-                response.setBody(objectMapper.writeValueAsString(errorResponse));
-                return response;
+                return ApiResponseUtil.createResponse(400, "{\"error\": \"Missing required parameters: username and code\"}");
             }
 
             context.getLogger().log("Verifying email for user: " + username);
@@ -102,8 +93,7 @@ public class VerifyEmailHandler implements RequestHandler<APIGatewayProxyRequest
                 responseBody.put("message", "Email verification successful");
                 responseBody.put("subscriptions", "User was subscribed to all notification topics");
                 responseBody.put("stepFunctionExecutionArn", startExecutionResponse.executionArn());
-                response.setStatusCode(200);
-                response.setBody(objectMapper.writeValueAsString(responseBody));
+                return ApiResponseUtil.createResponse(200, objectMapper.writeValueAsString(responseBody));
 
             } catch (Exception e) {
                 context.getLogger().log("Failed to start subscription step function: " + e.getMessage());
@@ -113,55 +103,22 @@ public class VerifyEmailHandler implements RequestHandler<APIGatewayProxyRequest
                 responseBody.put("status", "partial_success");
                 responseBody.put("message", "Email verification successful");
                 responseBody.put("subscriptionWarning", "There was an issue with topic subscriptions: " + e.getMessage());
-                response.setStatusCode(200);
-                response.setBody(objectMapper.writeValueAsString(responseBody));
+                return ApiResponseUtil.createResponse(200, objectMapper.writeValueAsString(responseBody));
             }
 
         } catch (CodeMismatchException e) {
             context.getLogger().log("Invalid verification code: " + e.getMessage());
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("error", "Invalid verification code");
-            response.setStatusCode(400);
-            try {
-                response.setBody(objectMapper.writeValueAsString(errorResponse));
-            } catch (Exception ex) {
-                response.setBody("{\"error\": \"Invalid verification code\"}");
-            }
+            return ApiResponseUtil.createResponse(400, "{\"error\": \"Invalid verification code\"}");
         } catch (ExpiredCodeException e) {
             context.getLogger().log("Verification code expired: " + e.getMessage());
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("error", "Verification code expired");
-            response.setStatusCode(400);
-            try {
-                response.setBody(objectMapper.writeValueAsString(errorResponse));
-            } catch (Exception ex) {
-                response.setBody("{\"error\": \"Verification code expired\"}");
-            }
+            return ApiResponseUtil.createResponse(400, "{\"error\": \"Verification code expired\"}");
         } catch (UserNotFoundException e) {
             context.getLogger().log("User not found: " + e.getMessage());
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("error", "User not found");
-            response.setStatusCode(404);
-            try {
-                response.setBody(objectMapper.writeValueAsString(errorResponse));
-            } catch (Exception ex) {
-                response.setBody("{\"error\": \"User not found\"}");
-            }
+            return ApiResponseUtil.createResponse(404, "{\"error\": \"User not found\"}");
         } catch (Exception e) {
             context.getLogger().log("Error verifying email: " + e.getMessage());
             e.printStackTrace();
-
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("error", "Failed to verify email: " + e.getMessage());
-
-            response.setStatusCode(500);
-            try {
-                response.setBody(objectMapper.writeValueAsString(errorResponse));
-            } catch (Exception ex) {
-                response.setBody("{\"error\": \"Internal server error\"}");
-            }
+            return ApiResponseUtil.createResponse(500, "{\"error\": \"Failed to verify email: " + e.getMessage() + "\"}");
         }
-
-        return response;
     }
 }
