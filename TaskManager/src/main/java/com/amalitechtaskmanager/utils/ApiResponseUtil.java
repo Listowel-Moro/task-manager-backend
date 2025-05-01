@@ -13,7 +13,7 @@ public class ApiResponseUtil {
 
         Map<String, String> headers = new HashMap<>();
         headers.put("Content-Type", "application/json");
-        headers.put("Access-Control-Allow-Origin", "http://localhost:8080");  // For production, replace with your specific domain
+        headers.put("Access-Control-Allow-Origin", "https://develop.d4p44endo1tru.amplifyapp.com");  // For production, replace with your specific domain
         headers.put("Access-Control-Allow-Methods", "OPTIONS,POST,GET");
         headers.put("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token");
         headers.put("Access-Control-Allow-Credentials", "true");
