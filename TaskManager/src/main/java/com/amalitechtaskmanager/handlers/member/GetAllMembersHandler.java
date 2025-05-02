@@ -36,7 +36,7 @@ public class GetAllMembersHandler implements RequestHandler<APIGatewayProxyReque
         try {
             String authHeader = input.getHeaders().get("Authorization");
             if (authHeader == null) {
-                return ApiResponseUtil.createResponse(401, "{\"error\": \"Unauthorized - Missing authorization header\"}");
+                return ApiResponseUtil.createResponse(input, 401, "{\"error\": \"Unauthorized - Missing authorization header\"}");
             }
 
             // Extract token, handling both "Bearer" prefix and raw token cases
@@ -47,7 +47,7 @@ public class GetAllMembersHandler implements RequestHandler<APIGatewayProxyReque
 
             // Check if user is in admin group
             if (!isUserInAdminGroup(idToken)) {
-                return ApiResponseUtil.createResponse(403, "{\"error\": \"Forbidden - User is not authorized to view members\"}");
+                return ApiResponseUtil.createResponse(input, 403, "{\"error\": \"Forbidden - User is not authorized to view members\"}");
             }
 
             // List users in the member group
@@ -89,11 +89,11 @@ public class GetAllMembersHandler implements RequestHandler<APIGatewayProxyReque
             responseBody.put("members", members);
             responseBody.put("count", members.size());
 
-            return ApiResponseUtil.createResponse(200, objectMapper.writeValueAsString(responseBody));
+            return ApiResponseUtil.createResponse(input, 200, objectMapper.writeValueAsString(responseBody));
 
         } catch (Exception e) {
             logger.severe("Error fetching members: " + e.getMessage());
-            return ApiResponseUtil.createResponse(500, "{\"error\": \"Failed to fetch members: " + e.getMessage() + "\"}");
+            return ApiResponseUtil.createResponse(input, 500, "{\"error\": \"Failed to fetch members: " + e.getMessage() + "\"}");
         }
     }
 

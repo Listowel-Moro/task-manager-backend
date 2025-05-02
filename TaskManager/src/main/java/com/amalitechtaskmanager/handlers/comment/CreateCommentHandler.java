@@ -47,7 +47,7 @@ public class CreateCommentHandler implements RequestHandler<APIGatewayProxyReque
             Comment comment = objectMapper.readValue(input.getBody(), Comment.class);
 
             if (comment.getUserId() == null || comment.getTaskId() == null || comment.getContent() == null) {
-                return createResponse(400, "Invalid input: userId, taskId, and content are required");
+                return createResponse(input, 400, "Invalid input: userId, taskId, and content are required");
             }
 
             String commentId = UUID.randomUUID().toString();
@@ -74,16 +74,16 @@ public class CreateCommentHandler implements RequestHandler<APIGatewayProxyReque
             responseBody.put("commentId", commentId);
             responseBody.put("message", "Comment created successfully");
 
-            return createResponse(200, objectMapper.writeValueAsString(responseBody));
+            return createResponse(input, 200, objectMapper.writeValueAsString(responseBody));
 
         } catch (JsonProcessingException e) {
-            return createResponse(400, "Invalid JSON format in request body");
+            return createResponse(input, 400, "Invalid JSON format in request body");
         } catch (DynamoDbException e) {
             context.getLogger().log("DynamoDB error: " + e.getMessage());
-            return createResponse(500, "Failed to create comment: " + e.getMessage());
+            return createResponse(input, 500, "Failed to create comment: " + e.getMessage());
         } catch (Exception e) {
             context.getLogger().log("Unexpected error: " + e.getMessage());
-            return createResponse(500, "Unexpected error occurred");
+            return createResponse(input, 500, "Unexpected error occurred");
         }
     }
 

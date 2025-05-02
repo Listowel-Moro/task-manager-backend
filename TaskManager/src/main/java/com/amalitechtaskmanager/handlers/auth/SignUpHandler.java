@@ -41,7 +41,7 @@ public class SignUpHandler implements RequestHandler<APIGatewayProxyRequestEvent
 //                response.setStatusCode(500);
 //                response.setBody("{\"message\": \"Environment variables not set correctly: USER_POOL_CLIENT_ID=" +
 //                        clientId + ", USER_POOL_ID=" + userPoolId + "\"}");
-                return createResponse(500, "{\"message\": \"Environment variables not set correctly: USER_POOL_CLIENT_ID=" +
+                return createResponse(input, 500, "{\"message\": \"Environment variables not set correctly: USER_POOL_CLIENT_ID=" +
                         clientId + ", USER_POOL_ID=" + userPoolId + "\"}");
             }
 
@@ -54,7 +54,7 @@ public class SignUpHandler implements RequestHandler<APIGatewayProxyRequestEvent
             if (email == null || password == null) {
 //                response.setStatusCode(400);
 //                response.setBody("{\"message\": \"Email and password are required\"}");
-                return createResponse(400, "{\"message\": \"Email and password are required\"}");
+                return createResponse(input, 400, "{\"message\": \"Email and password are required\"}");
             }
 
             // Create user attributes
@@ -115,7 +115,7 @@ public class SignUpHandler implements RequestHandler<APIGatewayProxyRequestEvent
 //                response.setStatusCode(200);
 //                response.setBody("{\"message\": \"User signed up, confirmed, and email verified successfully\", \"userId\": \"" +
 //                        signUpResponse.userSub() + "\"}");
-                createResponse(200, "{\"message\": \"User signed up, confirmed, and email verified successfully\", \"userId\": \"" +
+                createResponse(input, 200, "{\"message\": \"User signed up, confirmed, and email verified successfully\", \"userId\": \"" +
                         signUpResponse.userSub() + "\"}");
             } catch (UsernameExistsException e) {
                 // If user already exists, try to confirm them anyway
@@ -146,17 +146,17 @@ public class SignUpHandler implements RequestHandler<APIGatewayProxyRequestEvent
 
 //                    response.setStatusCode(200);
 //                    response.setBody("{\"message\": \"User already exists, has been confirmed, and email verified\"}");
-                    createResponse(200, "{\"message\": \"User already exists, has been confirmed, and email verified\"}");
+                    createResponse(input, 200, "{\"message\": \"User already exists, has been confirmed, and email verified\"}");
                 } catch (Exception confirmException) {
                     if (confirmException.getMessage().contains("User does not exist")) {
 //                        response.setStatusCode(404);
 //                        response.setBody("{\"message\": \"Error: User not found\"}");
-                        createResponse(404, "{\"message\": \"Error: User not found\"}");
+                        createResponse(input, 404, "{\"message\": \"Error: User not found\"}");
                     } else {
 //                        response.setStatusCode(400);
 //                        response.setBody("{\"message\": \"User exists but could not be confirmed: " +
 //                                confirmException.getMessage() + "\"}");
-                        createResponse(400, "{\"message\": \"User exists but could not be confirmed: " +
+                        createResponse(input, 400, "{\"message\": \"User exists but could not be confirmed: " +
                                 confirmException.getMessage() + "\"}");
                     }
                 }
@@ -165,7 +165,7 @@ public class SignUpHandler implements RequestHandler<APIGatewayProxyRequestEvent
             context.getLogger().log("Error processing request: " + e.getMessage());
 //            response.setStatusCode(500);
 //            response.setBody("{\"message\": \"Error signing up: " + e.getMessage() + "\"}");
-            createResponse(500, "{\"message\": \"Error signing up: " + e.getMessage() + "\"}");
+            createResponse(input, 500, "{\"message\": \"Error signing up: " + e.getMessage() + "\"}");
         }
 
         return response;

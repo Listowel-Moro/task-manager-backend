@@ -43,7 +43,7 @@ public class ResendTempPasswordHandler implements RequestHandler<APIGatewayProxy
             String authToken = input.getHeaders().get("Authorization");
             if (authToken == null || authToken.isEmpty()) {
                 context.getLogger().log("Missing Authorization header");
-                return ApiResponseUtil.createResponse(401, "{\"error\": \"Unauthorized - Missing authentication\"}");
+                return ApiResponseUtil.createResponse(input, 401, "{\"error\": \"Unauthorized - Missing authentication\"}");
             }
 
             // Extract the token from the header (remove "Bearer " prefix if present)
@@ -55,12 +55,12 @@ public class ResendTempPasswordHandler implements RequestHandler<APIGatewayProxy
             // Get the user from the token
             String callerUsername = getUsernameFromToken(token, context);
             if (callerUsername == null) {
-                return ApiResponseUtil.createResponse(401, "{\"error\": \"Invalid authentication token\"}");
+                return ApiResponseUtil.createResponse(input, 401, "{\"error\": \"Invalid authentication token\"}");
             }
 
             // Check if the caller is an admin
             if (!isUserInAdminGroup(callerUsername, context)) {
-                return ApiResponseUtil.createResponse(403, "{\"error\": \"Forbidden - Admin privileges required\"}");
+                return ApiResponseUtil.createResponse(input, 403, "{\"error\": \"Forbidden - Admin privileges required\"}");
             }
 
             // Parse request body to get the target username
@@ -69,7 +69,7 @@ public class ResendTempPasswordHandler implements RequestHandler<APIGatewayProxy
 
             if (targetUsername == null || targetUsername.trim().isEmpty()) {
                 context.getLogger().log("Missing username parameter");
-                return ApiResponseUtil.createResponse(400, "{\"error\": \"Missing required parameter: username\"}");
+                return ApiResponseUtil.createResponse(input, 400, "{\"error\": \"Missing required parameter: username\"}");
             }
 
             context.getLogger().log("Admin " + callerUsername + " is resending temporary password for user: " + targetUsername);
@@ -104,7 +104,7 @@ public class ResendTempPasswordHandler implements RequestHandler<APIGatewayProxy
                 responseBody.put("message", "Temporary password has been reset");
                 responseBody.put("tempPassword", tempPassword); // For development/testing only
                 context.getLogger().log("Temporary password reset successfully for user: " + targetUsername);
-                return ApiResponseUtil.createResponse(200, objectMapper.writeValueAsString(responseBody));
+                return ApiResponseUtil.createResponse(input, 200, objectMapper.writeValueAsString(responseBody));
 
             } catch (UserNotFoundException e) {
                 throw e; // Re-throw to be caught by the outer catch block
@@ -112,20 +112,20 @@ public class ResendTempPasswordHandler implements RequestHandler<APIGatewayProxy
 
         } catch (UserNotFoundException e) {
             context.getLogger().log("User not found: " + e.getMessage());
-            return ApiResponseUtil.createResponse(404, "{\"error\": \"User not found\"}");
+            return ApiResponseUtil.createResponse(input, 404, "{\"error\": \"User not found\"}");
         } catch (NotAuthorizedException e) {
             context.getLogger().log("Not authorized: " + e.getMessage());
-            return ApiResponseUtil.createResponse(401, "{\"error\": \"Invalid or expired authentication\"}");
+            return ApiResponseUtil.createResponse(input, 401, "{\"error\": \"Invalid or expired authentication\"}");
         } catch (LimitExceededException e) {
             context.getLogger().log("Limit exceeded: " + e.getMessage());
-            return ApiResponseUtil.createResponse(429, "{\"error\": \"Too many attempts. Please try again later.\"}");
+            return ApiResponseUtil.createResponse(input, 429, "{\"error\": \"Too many attempts. Please try again later.\"}");
         } catch (TooManyRequestsException e) {
             context.getLogger().log("Too many requests: " + e.getMessage());
-            return ApiResponseUtil.createResponse(429, "{\"error\": \"Rate limit exceeded. Please try again later.\"}");
+            return ApiResponseUtil.createResponse(input, 429, "{\"error\": \"Rate limit exceeded. Please try again later.\"}");
         } catch (Exception e) {
             context.getLogger().log("Error resetting temporary password: " + e.getMessage());
             e.printStackTrace();
-            return ApiResponseUtil.createResponse(500, "{\"error\": \"Failed to reset temporary password: " + e.getMessage() + "\"}");
+            return ApiResponseUtil.createResponse(input, 500, "{\"error\": \"Failed to reset temporary password: " + e.getMessage() + "\"}");
         }
     }
 
