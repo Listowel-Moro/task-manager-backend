@@ -1,5 +1,6 @@
 package com.amalitechtaskmanager.handlers.auth;
 
+import com.amalitechtaskmanager.utils.ApiResponseUtil;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
@@ -7,7 +8,6 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.fasterxml.jackson.databind.ObjectMapper;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.*;
-import com.amalitechtaskmanager.utils.ApiResponseUtil;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -31,7 +31,7 @@ public class TokenRefreshHandler implements RequestHandler<APIGatewayProxyReques
             String refreshToken = requestBody.get("refreshToken");
 
             if (refreshToken == null || refreshToken.isEmpty()) {
-                return ApiResponseUtil.createResponse(400, "{\"message\": \"Refresh token is required\"}");
+                return ApiResponseUtil.createResponse(input, 400, "{\"message\": \"Refresh token is required\"}");
             }
 
             // Create auth parameters
@@ -58,14 +58,14 @@ public class TokenRefreshHandler implements RequestHandler<APIGatewayProxyReques
             tokens.put("expiresIn", String.valueOf(authResult.expiresIn()));
             tokens.put("tokenType", authResult.tokenType());
 
-            return ApiResponseUtil.createResponse(200, objectMapper.writeValueAsString(tokens));
+            return ApiResponseUtil.createResponse(input, 200, objectMapper.writeValueAsString(tokens));
 
         } catch (NotAuthorizedException e) {
             context.getLogger().log("Invalid refresh token: " + e.getMessage());
-            return ApiResponseUtil.createResponse(401, "{\"message\": \"Invalid or expired refresh token\"}");
+            return ApiResponseUtil.createResponse(input, 401, "{\"message\": \"Invalid or expired refresh token\"}");
         } catch (Exception e) {
             context.getLogger().log("Error refreshing token: " + e.getMessage());
-            return ApiResponseUtil.createResponse(500, "{\"message\": \"Error refreshing token: " + e.getMessage() + "\"}");
+            return ApiResponseUtil.createResponse(input, 500, "{\"message\": \"Error refreshing token: " + e.getMessage() + "\"}");
         }
     }
 }

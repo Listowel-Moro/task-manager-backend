@@ -40,7 +40,7 @@ public class DeleteCommentHandler implements RequestHandler<APIGatewayProxyReque
             String commentId= input.getPathParameters().get("commentId");
 
             if( commentId==null ||commentId.isEmpty()) {
-                return createResponse(400, "Invalid input: commentId is required");
+                return createResponse(input, 400, "Invalid input: commentId is required");
             }
             Map<String, AttributeValue> key = new HashMap<>();
             key.put("commentId", AttributeValue.builder().s(commentId).build());
@@ -58,16 +58,16 @@ public class DeleteCommentHandler implements RequestHandler<APIGatewayProxyReque
             Map<String, String> responseBody = new HashMap<>();
             responseBody.put("message", "Comment deleted successfully");
 
-            return createResponse(200, objectMapper.writeValueAsString(responseBody));
+            return createResponse(input, 200, objectMapper.writeValueAsString(responseBody));
 
         } catch (JsonProcessingException e) {
-            return createResponse(400, "Invalid JSON format in request body");
+            return createResponse(input, 400, "Invalid JSON format in request body");
         } catch (DynamoDbException e) {
             context.getLogger().log("DynamoDB error: " + e.getMessage());
-            return createResponse(500, "Failed to delete comment: " + e.getMessage());
+            return createResponse(input, 500, "Failed to delete comment: " + e.getMessage());
         } catch (Exception e) {
             context.getLogger().log("Unexpected error: " + e.getMessage());
-            return createResponse(500, "Unexpected error occurred");
+            return createResponse(input, 500, "Unexpected error occurred");
         }
     }
 }

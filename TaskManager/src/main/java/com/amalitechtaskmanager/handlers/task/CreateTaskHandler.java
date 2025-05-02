@@ -65,7 +65,7 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
             String idToken = input.getHeaders().get("Authorization");
 
             if (idToken == null) {
-                return createResponse(401, "Unauthorized-Missing Header");
+                return createResponse(input, 401, "{\"error\": \"Unauthorized-Missing Header\"}");
             }
 
             if (idToken.startsWith("Bearer")) {
@@ -74,16 +74,16 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
 
             if (!isUserInAdminGroup(idToken)) {
                 return createResponse(403, "Forbidden-User not authorized for this operation");
+                return createResponse(input, 403, "{\"error\": \"Forbidden-User not authorized for this operation\"}");
             }
 
             Task task = objectMapper.readValue(input.getBody(), Task.class);
             if (task.getName() == null || task.getName().isEmpty() ||
                     task.getDeadline() == null ||
                     task.getUserId() == null || task.getUserId().isEmpty()) {
-                return new APIGatewayProxyResponseEvent()
-                        .withStatusCode(400)
-                        .withBody("{\"error\": \"Name, deadline, and userId are required\"}");
+                return createResponse(input, 400, "{\"error\": \"Name, deadline, and userId are required\"}");
             }
+
             task.setTaskId(UUID.randomUUID().toString());
             task.setStatus(TaskStatus.OPEN);
             task.setDescription(task.getDescription() != null ? task.getDescription() : "");
@@ -101,6 +101,7 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
             item.put("status", AttributeValue.builder().s(task.getStatus().toString()).build());
             item.put("deadline", AttributeValue.builder().s(task.getDeadline().toString()).build());
             item.put("userId", AttributeValue.builder().s(task.getUserId()).build());
+
             dynamoDbClient.putItem(PutItemRequest.builder()
                     .tableName(tasksTable)
                     .item(item)
@@ -136,10 +137,8 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
             responseBody.put("taskId", task.getTaskId());
             responseBody.put("message", "Task created and queued for assignment" +
                     (scheduledExpiration ? ", expiration scheduled" : ""));
-            return new APIGatewayProxyResponseEvent()
-                    .withStatusCode(200)
-                    .withBody(objectMapper.writeValueAsString(responseBody))
-                    .withHeaders(Map.of("Content-Type", "application/json"));
+            return createResponse(input, 200, objectMapper.writeValueAsString(responseBody));
+
         } catch (Exception e) {
             context.getLogger().log("Error: " + e.getMessage());
             context.getLogger().log("Queue URL: " + taskAssignmentQueue);
@@ -235,6 +234,7 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
             }
         } else {
             context.getLogger().log("Email " + email + " is already subscribed to topic " + topicArn);
+            return createResponse(input, 500, "{\"error\": \"" + e.getMessage() + "\"}");
         }
     }
 }

@@ -1,12 +1,12 @@
 package com.amalitechtaskmanager.handlers.task;
 
+import com.amalitechtaskmanager.factories.DynamoDbFactory;
+import com.amalitechtaskmanager.factories.ObjectMapperFactory;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.amalitechtaskmanager.factories.DynamoDbFactory;
-import com.amalitechtaskmanager.factories.ObjectMapperFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
@@ -34,7 +34,7 @@ public class GetAdminTaskHandler implements RequestHandler<APIGatewayProxyReques
         String taskId = request.getPathParameters().get("taskId");
 
         if (taskId == null || taskId.trim().isEmpty()) {
-            return createResponse(400, "Task ID is required");
+            return createResponse(request, 400, "Task ID is required");
         }
 
         try {
@@ -48,18 +48,18 @@ public class GetAdminTaskHandler implements RequestHandler<APIGatewayProxyReques
                     .build());
 
             if (!response.hasItem()) {
-                return createResponse(404, "Task not found");
+                return createResponse(request, 404, "Task not found");
             }
 
             Map<String, Object> taskMap = convertDynamoItemToMap(response.item());
             String responseBody = mapper.writeValueAsString(taskMap);
 
             logger.info("Successfully retrieved task {}", taskId);
-            return createResponse(200, responseBody);
+            return createResponse(request, 200, responseBody);
 
         } catch (Exception e) {
             logger.error("Error retrieving task {}: {}", taskId, e.getMessage());
-            return createResponse(500, "Internal server error: " + e.getMessage());
+            return createResponse(request, 500, "Internal server error: " + e.getMessage());
         }
     }
 

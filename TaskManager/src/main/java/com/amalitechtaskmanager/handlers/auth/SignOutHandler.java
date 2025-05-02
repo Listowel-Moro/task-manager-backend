@@ -28,7 +28,7 @@ public class SignOutHandler implements RequestHandler<APIGatewayProxyRequestEven
             String accessToken = requestBody.get("accessToken");
 
             if (accessToken == null || accessToken.isEmpty()) {
-                return ApiResponseUtil.createResponse(400, "{\"message\": \"Access token is required\"}");
+                return ApiResponseUtil.createResponse(input, 400, "{\"message\": \"Access token is required\"}");
             }
 
             // Create global sign-out request
@@ -39,14 +39,14 @@ public class SignOutHandler implements RequestHandler<APIGatewayProxyRequestEven
             // Sign out user and invalidate all issued tokens
             cognitoClient.globalSignOut(signOutRequest);
 
-            return ApiResponseUtil.createResponse(200, "{\"message\": \"Successfully signed out\"}");
+            return ApiResponseUtil.createResponse(input, 200, "{\"message\": \"Successfully signed out\"}");
 
         } catch (NotAuthorizedException e) {
             context.getLogger().log("Authentication error during sign out: " + e.getMessage());
-            return ApiResponseUtil.createResponse(401, "{\"message\": \"Invalid or expired access token\"}");
+            return ApiResponseUtil.createResponse(input, 401, "{\"message\": \"Invalid or expired access token\"}");
         } catch (Exception e) {
             context.getLogger().log("Error during sign out: " + e.getMessage());
-            return ApiResponseUtil.createResponse(500, "{\"message\": \"Error signing out: " + e.getMessage() + "\"}");
+            return ApiResponseUtil.createResponse(input, 500, "{\"message\": \"Error signing out: " + e.getMessage() + "\"}");
         }
     }
 }

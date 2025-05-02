@@ -46,7 +46,7 @@ public class GetCommentsByTaskIdHandler implements RequestHandler<APIGatewayProx
             // Get taskId from path parameters
             Map<String, String> pathParameters = input.getPathParameters();
             if (pathParameters == null || !pathParameters.containsKey("taskId")) {
-                return createResponse(400, "Missing taskId parameter");
+                return createResponse(input, 400, "Missing taskId parameter");
             }
 
             String taskId = pathParameters.get("taskId");
@@ -80,16 +80,16 @@ public class GetCommentsByTaskIdHandler implements RequestHandler<APIGatewayProx
             }
 
             // Return the comments
-            return createResponse(200, objectMapper.writeValueAsString(comments));
+            return createResponse(input, 200, objectMapper.writeValueAsString(comments));
 
         } catch (JsonProcessingException e) {
-            return createResponse(400, "Error processing JSON: " + e.getMessage());
+            return createResponse(input, 400, "Error processing JSON: " + e.getMessage());
         } catch (DynamoDbException e) {
             context.getLogger().log("DynamoDB error: " + e.getMessage());
-            return createResponse(500, "Failed to retrieve comments: " + e.getMessage());
+            return createResponse(input, 500, "Failed to retrieve comments: " + e.getMessage());
         } catch (Exception e) {
             context.getLogger().log("Unexpected error: " + e.getMessage());
-            return createResponse(500, "Unexpected error occurred");
+            return createResponse(input, 500, "Unexpected error occurred");
         }
     }
 

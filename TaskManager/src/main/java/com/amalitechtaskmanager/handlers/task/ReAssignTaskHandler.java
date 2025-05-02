@@ -1,14 +1,14 @@
 package com.amalitechtaskmanager.handlers.task;
 
+import com.amalitechtaskmanager.factories.ObjectMapperFactory;
+import com.amalitechtaskmanager.model.Task;
 import com.amalitechtaskmanager.model.TaskStatus;
 import com.amalitechtaskmanager.utils.TaskUtils;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
-import com.amalitechtaskmanager.model.Task;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.amalitechtaskmanager.factories.ObjectMapperFactory;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -33,12 +33,12 @@ public class ReAssignTaskHandler implements RequestHandler<APIGatewayProxyReques
             String deadline = (String) body.get("deadline");
 
             if (taskId == null || newUserId == null) {
-                return createResponse(400, "Missing taskId or newAssignee");
+                return createResponse(event, 400, "Missing taskId or newAssignee");
             }
 
             Task task = TaskUtils.getTaskById(taskId, TABLE_NAME);
             if (task == null) {
-                return createResponse(404, "Task not found");
+                return createResponse(event, 404, "Task not found");
             }
 
             String oldUserId = task.getUserId();
@@ -60,11 +60,11 @@ public class ReAssignTaskHandler implements RequestHandler<APIGatewayProxyReques
             String previousAssigneeSubject = "Task Reassignment: " + task.getName();
             sendEmailNotification(TASK_ASSIGNMENT_TOPIC_ARN, oldUserId, previousAssigneeSubject, previousAssigneeMessage);
 
-            return createResponse(200, "Task reassigned successfully");
+            return createResponse(event, 200, "Task reassigned successfully");
 
         } catch (Exception e) {
             e.printStackTrace();
-            return createResponse(500, "Internal Server Error: " + e.getMessage());
+            return createResponse(event, 500, "Internal Server Error: " + e.getMessage());
         }
     }
 

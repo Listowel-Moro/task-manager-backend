@@ -43,7 +43,7 @@ public class AdminListAllMembers implements RequestHandler<APIGatewayProxyReques
             String idToken = requestEvent.getHeaders().get("Authorization");
 
             if (idToken == null) {
-                return createResponse(401, "Unauthorized-Missing Header");
+                return createResponse(requestEvent, 401, "Unauthorized-Missing Header");
             }
 
             if (idToken.startsWith("Bearer")) {
@@ -52,7 +52,7 @@ public class AdminListAllMembers implements RequestHandler<APIGatewayProxyReques
 
 
             if (!isUserInAdminGroup(idToken)) {
-                return createResponse(403, "Forbidden-User not authorized for this operation");
+                return createResponse(requestEvent, 403, "Forbidden-User not authorized for this operation");
             }
 
                 ListUsersInGroupRequest listUsersInGroupRequest = ListUsersInGroupRequest.builder()
@@ -70,7 +70,7 @@ public class AdminListAllMembers implements RequestHandler<APIGatewayProxyReques
             Logger.getAnonymousLogger().info(e.getMessage());
 
 
-            return createResponse(500, "Internal ServerError:" + e.getMessage());
+            return createResponse(requestEvent, 500, "Internal ServerError:" + e.getMessage());
         }
 
 
