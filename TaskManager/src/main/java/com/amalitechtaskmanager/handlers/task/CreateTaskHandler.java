@@ -73,7 +73,6 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
             }
 
             if (!isUserInAdminGroup(idToken)) {
-                return createResponse(403, "Forbidden-User not authorized for this operation");
                 return createResponse(input, 403, "{\"error\": \"Forbidden-User not authorized for this operation\"}");
             }
 
@@ -234,7 +233,6 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
             }
         } else {
             context.getLogger().log("Email " + email + " is already subscribed to topic " + topicArn);
-            return createResponse(input, 500, "{\"error\": \"" + e.getMessage() + "\"}");
         }
     }
 }
