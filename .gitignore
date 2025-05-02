@@ -1,0 +1,9 @@
+# Default ignored files
+/shelf/
+/.idea/workspace.xml
+target/
+.aws-sam/
+.idea/*
+.idea/AugmentWebviewStateStore.xml
+.idea/misc.xml
+samconfig.toml
