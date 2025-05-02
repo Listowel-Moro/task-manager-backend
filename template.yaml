@@ -90,8 +90,10 @@ Resources:
       StageName: Prod
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        AllowHeaders: "'Content-Type,Authorization'"
-        AllowOrigin: "'*'"
+        AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'https://develop.d4p44endo1tru.amplifyapp.com'"
+        AllowCredentials: true
+        MaxAge: "'3600'"
       Auth:
         DefaultAuthorizer: CognitoAuthorizer
         Authorizers:
@@ -99,6 +101,8 @@ Resources:
             UserPoolArn: !GetAtt UserPool.Arn
             Identity:
               Header: Authorization
+        # Important: Add this to ensure OPTIONS requests bypass authorization
+        AddDefaultAuthorizerToCorsPreflight: false
 
   #============================================================================
   # DynamoDB Resources
