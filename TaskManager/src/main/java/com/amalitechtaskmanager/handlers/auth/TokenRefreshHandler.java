@@ -1,6 +1,6 @@
-// TokenRefreshHandler.java
 package com.amalitechtaskmanager.handlers.auth;
 
+import com.amalitechtaskmanager.utils.ApiResponseUtil;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
@@ -25,21 +25,13 @@ public class TokenRefreshHandler implements RequestHandler<APIGatewayProxyReques
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
-        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
-        response.setHeaders(Map.of(
-                "Content-Type", "application/json",
-                "Access-Control-Allow-Origin", "*"
-        ));
-
         try {
             // Parse request body
             Map<String, String> requestBody = objectMapper.readValue(input.getBody(), Map.class);
             String refreshToken = requestBody.get("refreshToken");
 
             if (refreshToken == null || refreshToken.isEmpty()) {
-                response.setStatusCode(400);
-                response.setBody("{\"message\": \"Refresh token is required\"}");
-                return response;
+                return ApiResponseUtil.createResponse(input, 400, "{\"message\": \"Refresh token is required\"}");
             }
 
             // Create auth parameters
@@ -66,19 +58,14 @@ public class TokenRefreshHandler implements RequestHandler<APIGatewayProxyReques
             tokens.put("expiresIn", String.valueOf(authResult.expiresIn()));
             tokens.put("tokenType", authResult.tokenType());
 
-            response.setStatusCode(200);
-            response.setBody(objectMapper.writeValueAsString(tokens));
+            return ApiResponseUtil.createResponse(input, 200, objectMapper.writeValueAsString(tokens));
 
         } catch (NotAuthorizedException e) {
             context.getLogger().log("Invalid refresh token: " + e.getMessage());
-            response.setStatusCode(401);
-            response.setBody("{\"message\": \"Invalid or expired refresh token\"}");
+            return ApiResponseUtil.createResponse(input, 401, "{\"message\": \"Invalid or expired refresh token\"}");
         } catch (Exception e) {
             context.getLogger().log("Error refreshing token: " + e.getMessage());
-            response.setStatusCode(500);
-            response.setBody("{\"message\": \"Error refreshing token: " + e.getMessage() + "\"}");
+            return ApiResponseUtil.createResponse(input, 500, "{\"message\": \"Error refreshing token: " + e.getMessage() + "\"}");
         }
-
-        return response;
     }
 }

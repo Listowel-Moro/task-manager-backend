@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.*;
 import software.amazon.awssdk.regions.Region;
+import com.amalitechtaskmanager.utils.ApiResponseUtil;
 
 import java.util.*;
 import java.util.logging.Logger;
@@ -32,16 +33,10 @@ public class GetAllMembersHandler implements RequestHandler<APIGatewayProxyReque
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
-        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Content-Type", "application/json");
-        headers.put("Access-Control-Allow-Origin", "*");
-        response.setHeaders(headers);
-
         try {
             String authHeader = input.getHeaders().get("Authorization");
             if (authHeader == null) {
-                return createErrorResponse(response, 401, "Unauthorized - Missing authorization header");
+                return ApiResponseUtil.createResponse(input, 401, "{\"error\": \"Unauthorized - Missing authorization header\"}");
             }
 
             // Extract token, handling both "Bearer" prefix and raw token cases
@@ -50,10 +45,9 @@ public class GetAllMembersHandler implements RequestHandler<APIGatewayProxyReque
                 idToken = authHeader.substring(authHeader.indexOf(" ") + 1).trim();
             }
 
-
             // Check if user is in admin group
             if (!isUserInAdminGroup(idToken)) {
-                return createErrorResponse(response, 403, "Forbidden - User is not authorized to view members");
+                return ApiResponseUtil.createResponse(input, 403, "{\"error\": \"Forbidden - User is not authorized to view members\"}");
             }
 
             // List users in the member group
@@ -95,15 +89,12 @@ public class GetAllMembersHandler implements RequestHandler<APIGatewayProxyReque
             responseBody.put("members", members);
             responseBody.put("count", members.size());
 
-            response.setStatusCode(200);
-            response.setBody(objectMapper.writeValueAsString(responseBody));
+            return ApiResponseUtil.createResponse(input, 200, objectMapper.writeValueAsString(responseBody));
 
         } catch (Exception e) {
             logger.severe("Error fetching members: " + e.getMessage());
-            return createErrorResponse(response, 500, "Failed to fetch members: " + e.getMessage());
+            return ApiResponseUtil.createResponse(input, 500, "{\"error\": \"Failed to fetch members: " + e.getMessage() + "\"}");
         }
-
-        return response;
     }
 
     private boolean isUserInAdminGroup(String idToken) {
@@ -136,19 +127,5 @@ public class GetAllMembersHandler implements RequestHandler<APIGatewayProxyReque
             logger.severe("Error parsing ID token: " + e.getMessage());
             return false;
         }
-    }
-
-    private APIGatewayProxyResponseEvent createErrorResponse(
-            APIGatewayProxyResponseEvent response, int statusCode, String errorMessage) {
-        try {
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("error", errorMessage);
-            response.setStatusCode(statusCode);
-            response.setBody(objectMapper.writeValueAsString(errorResponse));
-        } catch (Exception e) {
-            response.setStatusCode(500);
-            response.setBody("{\"error\": \"Internal server error\"}");
-        }
-        return response;
     }
 }

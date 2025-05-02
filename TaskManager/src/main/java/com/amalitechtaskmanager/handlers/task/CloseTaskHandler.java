@@ -1,13 +1,14 @@
 package com.amalitechtaskmanager.handlers.task;
 
+import com.amalitechtaskmanager.model.Task;
 import com.amalitechtaskmanager.model.TaskStatus;
 import com.amalitechtaskmanager.utils.AuthorizerUtil;
+import com.amalitechtaskmanager.utils.TaskUtils;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
-import com.amalitechtaskmanager.model.Task;
-import com.amalitechtaskmanager.utils.TaskUtils;
+
 import java.time.format.DateTimeFormatter;
 
 import static com.amalitechtaskmanager.utils.ApiResponseUtil.createResponse;
@@ -26,11 +27,11 @@ public class CloseTaskHandler implements RequestHandler<APIGatewayProxyRequestEv
         String idToken = event.getHeaders().get("Authorization");
 
         if (idToken == null) {
-            return createResponse(401, "Unauthorized-Missing Header");
+            return createResponse(event, 401, "Unauthorized-Missing Header");
         }
 
         if (!AuthorizerUtil.authorize(idToken)){
-            return createResponse(401, "not authorized to perform this operation");
+            return createResponse(event, 401, "not authorized to perform this operation");
         }
 
 
@@ -38,12 +39,12 @@ public class CloseTaskHandler implements RequestHandler<APIGatewayProxyRequestEv
         try {
             String taskId = event.getPathParameters().get("taskId");
             if (taskId == null) {
-                return createResponse(400, "Missing taskId");
+                return createResponse(event, 400, "Missing taskId");
             }
 
             Task task = TaskUtils.getTaskById(taskId, TABLE_NAME);
             if (task == null) {
-                return createResponse(404, "Task not found");
+                return createResponse(event, 404, "Task not found");
             }
 
             task.setStatus(TaskStatus.CLOSED);
@@ -55,10 +56,10 @@ public class CloseTaskHandler implements RequestHandler<APIGatewayProxyRequestEv
             sendEmailNotification(TASK_CLOSED_TOPIC_ARN, task.getUserId(), subject, message);
             context.getLogger().log("Task closure notification sent to: " + task.getUserId());
 
-            return createResponse(200, "Task closed successfully");
+            return createResponse(event, 200, "Task closed successfully");
         } catch (Exception e) {
             context.getLogger().log("Error closing task: " + e.getMessage());
-            return createResponse(500, "Internal Server Error: " + e.getMessage());
+            return createResponse(event, 500, "Internal Server Error: " + e.getMessage());
         }
     }
 

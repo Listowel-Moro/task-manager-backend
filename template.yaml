@@ -127,13 +127,20 @@ Resources:
       AttributeDefinitions:
         - AttributeName: commentId
           AttributeType: S
+        - AttributeName: taskId
+          AttributeType: S
       KeySchema:
         - AttributeName: commentId
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
-      Tags:
-        - Key: Component
-          Value: DynamoDB
+      GlobalSecondaryIndexes:
+        - IndexName: taskId-index
+          KeySchema:
+            - AttributeName: taskId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
 
   #============================================================================
   # SNS and SQS Resources
@@ -179,10 +186,18 @@ Resources:
         - Key: Component
           Value: SNS-SQS
 
-  TaskExpirationNotificationTopic:
+  TaskExpirationUserNotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: TaskExpirationNotificationTopic
+      TopicName: TaskExpirationUserNotificationTopic
+      Tags:
+        - Key: Component
+          Value: SNS-SQS
+
+  TaskExpirationAdminNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: TaskExpirationAdminNotificationTopic
       Tags:
         - Key: Component
           Value: SNS-SQS
@@ -299,7 +314,8 @@ Resources:
                   - sns:ListSubscriptionsByTopic
                 Resource:
                   - !Ref TaskAssignmentNotificationTopic
-                  - !Ref TaskExpirationNotificationTopic
+                  - !Ref TaskExpirationUserNotificationTopic
+                  - !Ref TaskExpirationAdminNotificationTopic
                   - !Ref TaskDeadlineNotificationTopic
                   - !Ref EmailNotificationTopic
                   - !Ref ClosedTasksNotificationTopic
@@ -313,6 +329,13 @@ Resources:
               - Effect: Allow
                 Action: iam:PassRole
                 Resource: !GetAtt EventBridgeSchedulerRole.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt CommentsTable.Arn
+                  - !Sub "${CommentsTable.Arn}/index/taskId-index"
+
       Tags:
         - Key: Component
           Value: Lambda
@@ -867,6 +890,9 @@ Resources:
           TASK_ASSIGNMENT_QUEUE: !GetAtt TaskAssignmentQueue.QueueUrl
           TASK_EXPIRATION_LAMBDA_ARN: !GetAtt TaskExpirationHandlerFunction.Arn
           SCHEDULER_ROLE_ARN: !GetAtt EventBridgeSchedulerRole.Arn
+          TASK_EXPIRATION_USER_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationUserNotificationTopic
+          TASK_EXPIRATION_ADMIN_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationAdminNotificationTopic
+          USER_POOL_ID: !Ref UserPool
       Events:
         Api:
           Type: Api
@@ -1091,7 +1117,8 @@ Resources:
       Environment:
         Variables:
           TASKS_TABLE: !Ref TasksTable
-          TASK_EXPIRATION_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationNotificationTopic
+          TASK_EXPIRATION_USER_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationUserNotificationTopic
+          TASK_EXPIRATION_ADMIN_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationAdminNotificationTopic
           TASK_DEADLINE_NOTIFICATION_TOPIC_ARN: !Ref TaskDeadlineNotificationTopic
           USER_POOL_ID: !Ref UserPool
           TASK_EXPIRATION_QUEUE_URL: !GetAtt TaskExpirationQueue.QueueUrl
@@ -1129,7 +1156,8 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
-          TASK_EXPIRATION_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationNotificationTopic
+          TASK_EXPIRATION_USER_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationUserNotificationTopic
+          TASK_EXPIRATION_ADMIN_NOTIFICATION_TOPIC_ARN: !Ref TaskExpirationAdminNotificationTopic
           USER_POOL_ID: !Ref UserPool
       Events:
         SqsEvent:
@@ -1239,12 +1267,13 @@ Resources:
       Runtime: java21
       MemorySize: 512
       Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
-          TABLE_NAME: Comments
+          TABLE_NAME: Comment
       Policies:
         - DynamoDBWritePolicy:
-            TableName: Comments
+            TableName: Comment
       Events:
         CreateCommentApi:
           Type: Api
@@ -1252,6 +1281,53 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /comments/post
             Method: POST
+
+
+
+  GetCommentsByTaskIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: TaskManager/
+      Handler: com.amalitechtaskmanager.handlers.comment.GetCommentsByTaskIdHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: Comment
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: Comment
+      Events:
+        GetCommentsByTaskIdApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /tasks/{taskId}/comments
+            Method: GET
+
+  GetCommentByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: TaskManager/
+      Handler: com.amalitechtaskmanager.handlers.comment.GetCommentByIdHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: Comment
+      Events:
+        GetCommentByIdApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /comments/{commentId}
+            Method: GET
+
+
 
   DeleteCommentFunction:
     Type: AWS::Serverless::Function
@@ -1261,9 +1337,10 @@ Resources:
       Runtime: java21
       MemorySize: 512
       Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
-          TABLE_NAME: Comments
+          TABLE_NAME: Comment
       Policies:
         - Version: "2012-10-17"
           Statement:
@@ -1276,7 +1353,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /comments/delete/{id}
+            Path: /comments/delete/{commentId}
             Method: DELETE
 
 
@@ -1471,9 +1548,13 @@ Outputs:
     Description: SQS Task Assignment Queue ARN
     Value: !GetAtt TaskAssignmentQueue.Arn
 
-  TaskExpirationNotificationTopicArn:
+  TaskExpirationUserNotificationTopicArn:
     Description: SNS Task Expiration Notification Topic ARN
-    Value: !Ref TaskExpirationNotificationTopic
+    Value: !Ref TaskExpirationUserNotificationTopic
+
+  TaskExpirationAdminNotificationTopicArn:
+    Description: SNS Task Expiration Notification Topic ARN
+    Value: !Ref TaskExpirationAdminNotificationTopic
 
   TeamMemberSubscriptionStepFunctionArn:
     Description: ARN of the Team Member Subscription Step Function

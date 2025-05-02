@@ -1,6 +1,5 @@
 package com.amalitechtaskmanager.handlers.task;
 
-import com.amalitechtaskmanager.exception.FailedToDeleteException;
 import com.amalitechtaskmanager.factories.DynamoDbFactory;
 import com.amalitechtaskmanager.utils.AuthorizerUtil;
 import com.amazonaws.services.lambda.runtime.Context;
@@ -8,16 +7,13 @@ import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
 
 import java.util.Map;
 import java.util.logging.Logger;
 
-
 import static com.amalitechtaskmanager.utils.ApiResponseUtil.createResponse;
-import static com.amalitechtaskmanager.utils.CheckUserRoleUtil.isUserInAdminGroup;
 
 @Slf4j
 public class AdminDeleteTaskHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
@@ -29,11 +25,11 @@ public class AdminDeleteTaskHandler implements RequestHandler<APIGatewayProxyReq
         String idToken = requestEvent.getHeaders().get("Authorization");
 
         if (idToken == null) {
-            return createResponse(401, "Unauthorized-Missing Header");
+            return createResponse(requestEvent, 401, "Unauthorized-Missing Header");
         }
 
        if (!AuthorizerUtil.authorize(idToken)){
-           return createResponse(403, "not authorized to perform this operation");
+           return createResponse(requestEvent, 403, "not authorized to perform this operation");
        }
 
 
@@ -41,7 +37,7 @@ public class AdminDeleteTaskHandler implements RequestHandler<APIGatewayProxyReq
 
         if( taskId ==null || taskId.trim().isEmpty()) {
 
-            return  createResponse(400,"Task ID is required");
+            return  createResponse(requestEvent, 400,"Task ID is required");
         }
 
          try{
@@ -51,11 +47,11 @@ public class AdminDeleteTaskHandler implements RequestHandler<APIGatewayProxyReq
 
              DynamoDbFactory.getClient().deleteItem(DeleteItemRequest.builder().tableName(TABLE_NAME).key(key).build());
 
-              return  createResponse(200,"Item Deleted successfully");
+              return  createResponse(requestEvent, 200,"Item Deleted successfully");
          } catch (Exception e) {
 
              Logger.getAnonymousLogger().info(e.getMessage());
-             return createResponse(500,"InternalServerError");
+             return createResponse(requestEvent, 500,"InternalServerError");
          }
 
 

@@ -1,4 +1,3 @@
-// ForgotPasswordHandler.java
 package com.amalitechtaskmanager.handlers.auth;
 
 import com.amazonaws.services.lambda.runtime.Context;
@@ -8,6 +7,7 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.fasterxml.jackson.databind.ObjectMapper;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.*;
+import com.amalitechtaskmanager.utils.ApiResponseUtil;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -25,18 +25,13 @@ public class ForgotPasswordHandler implements RequestHandler<APIGatewayProxyRequ
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
-        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
-        response.setHeaders(Map.of("Content-Type", "application/json"));
-
         try {
             // Parse request body
             Map<String, String> requestBody = objectMapper.readValue(input.getBody(), Map.class);
             String email = requestBody.get("email");
 
             if (email == null) {
-                response.setStatusCode(400);
-                response.setBody("{\"message\": \"Email is required\"}");
-                return response;
+                return ApiResponseUtil.createResponse(input, 400, "{\"message\": \"Email is required\"}");
             }
 
             // Create forgot password request
@@ -48,25 +43,20 @@ public class ForgotPasswordHandler implements RequestHandler<APIGatewayProxyRequ
             // Initiate forgot password flow
             ForgotPasswordResponse forgotPasswordResponse = cognitoClient.forgotPassword(forgotPasswordRequest);
 
-            response.setStatusCode(200);
             Map<String, Object> responseBody = new HashMap<>();
             responseBody.put("message", "Password reset code sent successfully");
             responseBody.put("deliveryMedium", forgotPasswordResponse.codeDeliveryDetails().deliveryMedium());
             responseBody.put("destination", forgotPasswordResponse.codeDeliveryDetails().destination());
 
-            response.setBody(objectMapper.writeValueAsString(responseBody));
+            return ApiResponseUtil.createResponse(input, 200, objectMapper.writeValueAsString(responseBody));
 
         } catch (UserNotFoundException e) {
             context.getLogger().log("User not found: " + e.getMessage());
             // For security reasons, don't reveal that the user doesn't exist
-            response.setStatusCode(200);
-            response.setBody("{\"message\": \"If the email exists, a password reset code has been sent\"}");
+            return ApiResponseUtil.createResponse(input, 200, "{\"message\": \"If the email exists, a password reset code has been sent\"}");
         } catch (Exception e) {
             context.getLogger().log("Error in forgot password flow: " + e.getMessage());
-            response.setStatusCode(500);
-            response.setBody("{\"message\": \"Error initiating password reset: " + e.getMessage() + "\"}");
+            return ApiResponseUtil.createResponse(input, 500, "{\"message\": \"Error initiating password reset: " + e.getMessage() + "\"}");
         }
-
-        return response;
     }
 }

@@ -1,22 +1,26 @@
 package com.amalitechtaskmanager.handlers.task;
 
+import com.amalitechtaskmanager.factories.DynamoDbFactory;
+import com.amalitechtaskmanager.factories.ObjectMapperFactory;
+import com.amalitechtaskmanager.utils.AnalyticsComputation;
+import com.amalitechtaskmanager.utils.ApiResponseUtil;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
-import com.amalitechtaskmanager.factories.DynamoDbFactory;
-import com.amalitechtaskmanager.factories.ObjectMapperFactory;
-import com.amalitechtaskmanager.utils.ApiResponseUtil;
-import com.amalitechtaskmanager.utils.AnalyticsComputation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
-import software.amazon.awssdk.services.dynamodb.model.*;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
+import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static com.amalitechtaskmanager.constants.StringConstants.TABLE_NAME;
@@ -44,11 +48,11 @@ public class GetAdminAnalyticsHandler implements RequestHandler<APIGatewayProxyR
             String responseBody = mapper.writeValueAsString(analytics);
             logger.info("Successfully computed analytics for {} tasks", tasks.size());
 
-            return ApiResponseUtil.createResponse(200, responseBody);
+            return ApiResponseUtil.createResponse(request, 200, responseBody);
 
         } catch (Exception e) {
             logger.error("Error processing analytics request: {}", e.getMessage(), e);
-            return ApiResponseUtil.createResponse(500,
+            return ApiResponseUtil.createResponse(request, 500,
                     String.format("{\"error\": \"Failed to compute analytics: %s\"}", e.getMessage()));
         }
     }

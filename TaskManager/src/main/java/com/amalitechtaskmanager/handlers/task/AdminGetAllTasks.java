@@ -1,4 +1,5 @@
 package com.amalitechtaskmanager.handlers.task;
+
 import com.amalitechtaskmanager.factories.DynamoDbFactory;
 import com.amalitechtaskmanager.factories.ObjectMapperFactory;
 import com.amalitechtaskmanager.utils.AuthorizerUtil;
@@ -10,8 +11,9 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
 import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
 
-
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static com.amalitechtaskmanager.constants.StringConstants.TABLE_NAME;
@@ -28,11 +30,11 @@ public class AdminGetAllTasks  implements RequestHandler<APIGatewayProxyRequestE
         String idToken = requestEvent.getHeaders().get("Authorization");
 
         if (idToken == null) {
-            return createResponse(401, "Unauthorized-Missing Header");
+            return createResponse(requestEvent, 401, "{\"error\": \"Not authorized to perform this operation\"}");
         }
 
         if (!AuthorizerUtil.authorize(idToken)){
-            return createResponse(401, "not authorized to perform this operation");
+            return createResponse(requestEvent, 401, "{\"error\": \"Not authorized to perform this operation\"}");
         }
 
         Map<String,String> queryParams= requestEvent.getQueryStringParameters();
@@ -50,14 +52,10 @@ try {
                     )))
             .toList();
 
-    return new APIGatewayProxyResponseEvent()
-            .withStatusCode(200)
-            .withBody(ObjectMapperFactory.getMapper().writeValueAsString(result));
+    return createResponse(requestEvent, 200, ObjectMapperFactory.getMapper().writeValueAsString(result));
 
 } catch (Exception e) {
-    return  new APIGatewayProxyResponseEvent()
-            .withStatusCode(500)
-            .withBody("{\"error\": \"" + e.getMessage() + "\"}");
+    return createResponse(requestEvent, 500, "{\"error\": \"" + e.getMessage() + "\"}");
 }
 
 
