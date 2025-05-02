@@ -48,6 +48,7 @@ public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Notifi
         for (DynamodbStreamRecord record : event.getRecords()) {
             String eventName = record.getEventName();
             if (!"INSERT".equals(eventName)) {
+                logger.warn("Skipping non-INSERT event");
                 continue;
             }
 
@@ -55,6 +56,7 @@ public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Notifi
                 Map<String, AttributeValue> newImage = record.getDynamodb().getNewImage();
                 if (newImage == null) {
                     errors.add("No newImage found for " + eventName + " event");
+                    logger.warn("No newImage found for " + eventName + " event");
                     continue;
                 }
 
@@ -65,18 +67,21 @@ public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Notifi
                 );
                 if (optionalTask.isEmpty()) {
                     errors.add("Failed to parse task object from record");
+                    logger.warn("Failed to parse task object from record");
                     continue;
                 }
 
                 Task task = optionalTask.get();
                 if (task.getTaskId() == null) {
                     errors.add("taskId missing in task object");
+                    logger.warn("taskId missing in task object");
                     continue;
                 }
 
                 LocalDateTime deadline = task.getDeadline();
                 if (deadline == null) {
                     errors.add("No deadline found for taskId: " + task.getTaskId());
+                    logger.warn("No deadline found for taskId: " + task.getTaskId());
                     continue;
                 }
 
@@ -85,8 +90,10 @@ public class CreateDeadlineEvent implements RequestHandler<DynamodbEvent, Notifi
 
                 if (reminderTime.isBefore(now)) {
                    errors.add("Reminder time " + reminderTime + " is in the past for taskId: " + task.getTaskId());
-                    continue;
+                   logger.warn("Reminder time {} is in the past for taskId: {}", reminderTime, task.getTaskId());
+                   continue;
                 }
+                logger.info("Creating schedule for taskId: {} at {}", task.getTaskId(), reminderTime);
                 schedulerUtils.createSchedule(task.getTaskId(),reminderTime, newImage, TARGET_LAMBDA_ARN, SCHEDULER_ROLE_ARN);
                 processedRecords++;
 

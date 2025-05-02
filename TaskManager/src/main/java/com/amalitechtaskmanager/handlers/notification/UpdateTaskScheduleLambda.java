@@ -43,6 +43,7 @@ public class UpdateTaskScheduleLambda implements RequestHandler<DynamodbEvent, N
 
         for (DynamodbStreamRecord record : event.getRecords()) {
             if (!"MODIFY".equals(record.getEventName())) {
+                logger.warn("Skipping non-MODIFY event");
                 continue;
             }
 
@@ -53,6 +54,7 @@ public class UpdateTaskScheduleLambda implements RequestHandler<DynamodbEvent, N
                 Optional<Task> optionalTask = DynamoDbUtils.parseTask(newImage);
                 if (optionalTask.isEmpty()) {
                     errors.add("Failed to parse task object from newImage");
+                    logger.warn("Failed to parse task object from newImage");
                     continue;
                 }
 
@@ -60,6 +62,7 @@ public class UpdateTaskScheduleLambda implements RequestHandler<DynamodbEvent, N
                 String taskId = task.getTaskId();
                 if (taskId == null) {
                     errors.add("Missing taskId in task");
+                    logger.warn("Missing taskId in task");
                     continue;
                 }
 
@@ -80,6 +83,7 @@ public class UpdateTaskScheduleLambda implements RequestHandler<DynamodbEvent, N
                 if (newDeadlineStr.isEmpty()) {
                     schedulerUtils.deleteSchedule(taskId);
                     errors.add("Missing deadline for taskId: " + taskId);
+                    logger.warn("Missing deadline for taskId: " + taskId);
                     continue;
                 }
 
@@ -87,12 +91,14 @@ public class UpdateTaskScheduleLambda implements RequestHandler<DynamodbEvent, N
                 boolean assigneeChanged = !newAssignee.equals(oldAssignee);
 
                 if (!deadlineChanged && !assigneeChanged) {
+                    logger.warn("Neither deadline nor assignee changed for taskId: " + taskId);
                     continue;
                 }
 
                 Optional<OffsetDateTime> parsedDeadline = SchedulerUtils.parseDeadline(newDeadlineStr.get());
                 if (parsedDeadline.isEmpty()) {
                     errors.add("Invalid deadline for taskId: " + taskId);
+                    logger.warn("Invalid deadline for taskId: " + taskId);
                     continue;
                 }
 
@@ -109,13 +115,13 @@ public class UpdateTaskScheduleLambda implements RequestHandler<DynamodbEvent, N
 
                 if (!ACTIVE_STATUS.equals(status)) {
                     schedulerUtils.deleteSchedule(taskId);
-
+                    logger.warn("Task is not active for taskId: {}, status: {}", taskId, status);
                     continue;
                 }
 
                 schedulerUtils.deleteSchedule(taskId);
 
-
+                logger.info("Creating new schedule for taskId: {} at {}", taskId, reminderTime);
                 schedulerUtils.createSchedule(taskId, reminderTime, newImage, TARGET_LAMBDA_ARN, SCHEDULER_ROLE_ARN);
 
                 updatedCount++;
