@@ -2,7 +2,7 @@ name: Deploy SAM Stack
 
 on:
   push:
-    branches: [ listowel ]
+    branches: [ dev ]
   workflow_dispatch:
 
 env:
