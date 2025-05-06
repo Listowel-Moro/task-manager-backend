@@ -1,6 +1,7 @@
 package com.amalitechtaskmanager.model;
 
 import com.amalitechtaskmanager.exception.CannotSetCompletedAtException;
+import com.amalitechtaskmanager.exception.DeadlineMustbeAfterCreatedTimeException;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
@@ -95,7 +96,9 @@ public class Task {
     }
 
 
-//    public void setCompletedAt(LocalDateTime completedAt) {
+
+
+    //    public void setCompletedAt(LocalDateTime completedAt) {
 //        if (completedAt != null && this.status != TaskStatus.COMPLETED) {
 //            throw new CannotSetCompletedAtException("Cannot set completedAt unless status is COMPLETED");
 //        }

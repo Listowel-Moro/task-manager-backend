@@ -1,5 +1,6 @@
 package com.amalitechtaskmanager.handlers.task;
 
+import com.amalitechtaskmanager.factories.ObjectMapperFactory;
 import com.amalitechtaskmanager.model.Task;
 import com.amalitechtaskmanager.model.TaskStatus;
 import com.amalitechtaskmanager.utils.AuthorizerUtil;
@@ -8,16 +9,22 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.Map;
 
 import static com.amalitechtaskmanager.utils.ApiResponseUtil.createResponse;
+import static com.amalitechtaskmanager.utils.CheckUserRoleUtil.getCurrentUserEmail;
+import static com.amalitechtaskmanager.utils.CheckUserRoleUtil.isUserInAdminGroup;
 import static com.amalitechtaskmanager.utils.SnsUtils.sendEmailNotification;
 
 public class CloseTaskHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     private static final String TABLE_NAME = System.getenv("TASKS_TABLE");
     private static final String TASK_CLOSED_TOPIC_ARN = System.getenv("TASK_CLOSED_TOPIC_ARN");
     private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("MMMM dd, yyyy HH:mm");
+    private static final ObjectMapper mapper = ObjectMapperFactory.getMapper();
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent event, Context context) {
@@ -28,10 +35,6 @@ public class CloseTaskHandler implements RequestHandler<APIGatewayProxyRequestEv
 
         if (idToken == null) {
             return createResponse(event, 401, "Unauthorized-Missing Header");
-        }
-
-        if (!AuthorizerUtil.authorize(idToken)){
-            return createResponse(event, 401, "not authorized to perform this operation");
         }
 
 
@@ -47,6 +50,10 @@ public class CloseTaskHandler implements RequestHandler<APIGatewayProxyRequestEv
                 return createResponse(event, 404, "Task not found");
             }
 
+            if (!isUserInAdminGroup(idToken) && !task.getUserId().equals(getCurrentUserEmail(event))) {
+                return createResponse(event, 403, "Forbidden - User is not authorized to complete this task");
+            }
+
             task.setStatus(TaskStatus.CLOSED);
             TaskUtils.updateTask(task, TABLE_NAME);
 
@@ -56,7 +63,13 @@ public class CloseTaskHandler implements RequestHandler<APIGatewayProxyRequestEv
             sendEmailNotification(TASK_CLOSED_TOPIC_ARN, task.getUserId(), subject, message);
             context.getLogger().log("Task closure notification sent to: " + task.getUserId());
 
-            return createResponse(event, 200, "Task closed successfully");
+            // create response body
+            Map<String, Object> responseBody = new HashMap<>();
+            responseBody.put("message", "Task closed successfully");
+            responseBody.put("taskId", task.getTaskId());
+
+            String body = mapper.writeValueAsString(responseBody);
+            return createResponse(event, 200, body);
         } catch (Exception e) {
             context.getLogger().log("Error closing task: " + e.getMessage());
             return createResponse(event, 500, "Internal Server Error: " + e.getMessage());

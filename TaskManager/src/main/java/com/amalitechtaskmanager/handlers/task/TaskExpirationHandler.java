@@ -41,46 +41,36 @@ import software.amazon.awssdk.services.cognitoidentityprovider.model.ListUsersIn
 
 public class TaskExpirationHandler implements RequestHandler<ScheduledEvent, Void> {
 
+    private final ExpirationQueueHandler expirationQueueHandler;
     private final DynamoDbClient dynamoDbClient;
-    private final SnsClient snsClient;
     private final SqsClient sqsClient;
     private final CognitoIdentityProviderClient cognitoClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
     private final String tasksTable;
-    private final String taskExpirationUserNotificationTopicArn;
-    private final String taskExpirationAdminNotificationTopicArn;
     private final String expirationQueueUrl;
-    private final String userPoolId;
 
-    public TaskExpirationHandler() {
+    public TaskExpirationHandler(ExpirationQueueHandler expirationQueueHandler) {
+        this.expirationQueueHandler = expirationQueueHandler;
         this.dynamoDbClient = DynamoDbClient.create();
-        this.snsClient = SnsClient.create();
         this.sqsClient = SqsClient.create();
         this.cognitoClient = CognitoIdentityProviderClient.create();
         this.tasksTable = System.getenv("TASKS_TABLE");
-        this.taskExpirationUserNotificationTopicArn = System.getenv("TASK_EXPIRATION_USER_NOTIFICATION_TOPIC_ARN");
-        this.taskExpirationAdminNotificationTopicArn = System.getenv("TASK_EXPIRATION_ADMIN_NOTIFICATION_TOPIC_ARN");
         this.expirationQueueUrl = System.getenv("TASK_EXPIRATION_QUEUE_URL");
-        this.userPoolId = System.getenv("USER_POOL_ID");
 
         this.objectMapper.registerModule(new JavaTimeModule());
         this.objectMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
         this.objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 
-    public TaskExpirationHandler(DynamoDbClient dynamoDbClient, SnsClient snsClient, SqsClient sqsClient, CognitoIdentityProviderClient cognitoClient) {
+    public TaskExpirationHandler(ExpirationQueueHandler expirationQueueHandler, DynamoDbClient dynamoDbClient, SnsClient snsClient, SqsClient sqsClient, CognitoIdentityProviderClient cognitoClient) {
+        this.expirationQueueHandler = expirationQueueHandler;
         this.dynamoDbClient = dynamoDbClient;
-        this.snsClient = snsClient;
         this.sqsClient = sqsClient;
         this.cognitoClient = cognitoClient;
         this.tasksTable = System.getProperty("TASKS_TABLE");
-        this.taskExpirationUserNotificationTopicArn = System.getProperty("TASK_EXPIRATION_USER_NOTIFICATION_TOPIC_ARN");
-        this.taskExpirationAdminNotificationTopicArn = System.getProperty("TASK_EXPIRATION_ADMIN_NOTIFICATION_TOPIC_ARN");
         this.expirationQueueUrl = System.getProperty("TASK_EXPIRATION_QUEUE_URL");
-        this.userPoolId = System.getProperty("USER_POOL_ID");
-
         this.objectMapper.registerModule(new JavaTimeModule());
         this.objectMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
         this.objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -167,7 +157,7 @@ public class TaskExpirationHandler implements RequestHandler<ScheduledEvent, Voi
                 context.getLogger().log("Task " + taskId + " has expired. Updating status.");
                 task.markAsExpired();
                 updateTaskStatus(taskId, TaskStatus.EXPIRED.toString());
-                processNotifications(task, context);
+                expirationQueueHandler.processNotifications(task, context);
             } else {
                 context.getLogger().log("Task " + taskId + " does not need to be expired.");
             }
@@ -200,7 +190,7 @@ public class TaskExpirationHandler implements RequestHandler<ScheduledEvent, Voi
         try {
             if (expirationQueueUrl == null || expirationQueueUrl.isEmpty()) {
                 context.getLogger().log("Expiration queue URL not configured, processing notifications directly");
-                processNotifications(task, context);
+                expirationQueueHandler.processNotifications(task, context);
                 return;
             }
 
@@ -214,89 +204,7 @@ public class TaskExpirationHandler implements RequestHandler<ScheduledEvent, Voi
         } catch (Exception e) {
             context.getLogger().log("Error queueing task for notification: " + e.getMessage() +
                     ". Attempting direct notification.");
-            processNotifications(task, context);
-        }
-    }
-
-    private List<String> getAdminEmails(Context context) {
-        try {
-            ListUsersInGroupRequest listUsersInGroupRequest = ListUsersInGroupRequest.builder()
-                    .userPoolId(userPoolId)
-                    .groupName("Admins")
-                    .build();
-
-            ListUsersInGroupResponse response = cognitoClient.listUsersInGroup(listUsersInGroupRequest);
-            context.getLogger().log("Found " + response.users().size() + " users in the Admins group");
-            context.getLogger().log(response.toString());
-
-            List<String> emails = response.users().stream()
-                    .map(user -> user.attributes().stream()
-                            .filter(attr -> attr.name().equals("email"))
-                            .findFirst()
-                            .map(AttributeType::value)
-                            .orElse(null))
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toList());
-
-            context.getLogger().log("Found " + emails.size() + " admin emails from Cognito");
-            return emails;
-        } catch (Exception e) {
-            context.getLogger().log("Error fetching admin emails: " + e.getMessage());
-            return List.of();
-        }
-    }
-
-    private void processNotifications(Task task, Context context) {
-        try {
-            if (taskExpirationUserNotificationTopicArn != null && taskExpirationAdminNotificationTopicArn != null) {
-                String userEmail = null;
-                if (task.getUserId() != null && !task.getUserId().isEmpty() && userPoolId != null && !userPoolId.isEmpty()) {
-                    try {
-                        AdminGetUserRequest userRequest = AdminGetUserRequest.builder()
-                                .userPoolId(userPoolId)
-                                .username(task.getUserId())
-                                .build();
-
-                        AdminGetUserResponse userResponse = cognitoClient.adminGetUser(userRequest);
-
-                        for (AttributeType attribute : userResponse.userAttributes()) {
-                            if ("email".equals(attribute.name())) {
-                                userEmail = attribute.value();
-                                break;
-                            }
-                        }
-                    } catch (Exception e) {
-                        context.getLogger().log("Error fetching user email: " + e.getMessage());
-                    }
-                }
-
-                List<String> adminEmails = getAdminEmails(context);
-                context.getLogger().log("Found the following " + adminEmails.size() + " admin emails from Cognito");
-
-                if (userEmail != null && !userEmail.isEmpty()) {
-                    String userSubject = "Task Expired: " + task.getName();
-                    String userMessage = String.format("EXPIRED: Task '%s' (ID: %s) has expired. The deadline was %s.",
-                            task.getName(), task.getTaskId(), task.getDeadline());
-                    SnsUtils.sendExpirationEmailNotification(snsClient, taskExpirationUserNotificationTopicArn, userEmail, userSubject, userMessage);
-                    context.getLogger().log("Sent expiration notification to user: " + task.getUserId());
-                }
-
-                if (!adminEmails.isEmpty()) {
-                    for (String adminEmail : adminEmails) {
-                        String adminSubject = "Admin Alert: " + task.getName();
-                        String adminMessage = String.format("Admin Alert: Task '%s' (ID: %s) assigned to user %s has expired. The deadline was %s.",
-                                task.getName(), task.getTaskId(), task.getUserId(), task.getDeadline());
-                        SnsUtils.sendExpirationEmailNotification(snsClient, taskExpirationAdminNotificationTopicArn, adminEmail, adminSubject, adminMessage);
-                    }
-                    context.getLogger().log("Sent expiration notification to " + adminEmails.size() + " admins for task: " + task.getTaskId());
-                } else {
-                    context.getLogger().log("No admin emails found to send notifications to");
-                }
-            } else {
-                context.getLogger().log("Notification topic not configured");
-            }
-        } catch (Exception e) {
-            context.getLogger().log("Error processing notifications: " + e.getMessage());
+            expirationQueueHandler.processNotifications(task, context);
         }
     }
 }

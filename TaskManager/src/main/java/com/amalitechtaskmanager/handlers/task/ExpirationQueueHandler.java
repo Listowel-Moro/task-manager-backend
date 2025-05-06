@@ -78,7 +78,7 @@ public class ExpirationQueueHandler implements RequestHandler<SQSEvent, Void> {
         return null;
     }
 
-    private List<String> getAdminEmails(Context context) {
+    public List<String> getAdminEmails(Context context) {
         try {
             ListUsersInGroupRequest listUsersInGroupRequest = ListUsersInGroupRequest.builder()
                     .userPoolId(userPoolId)
@@ -105,7 +105,7 @@ public class ExpirationQueueHandler implements RequestHandler<SQSEvent, Void> {
         }
     }
 
-    private void processNotifications(Task task, Context context) {
+    public void processNotifications(Task task, Context context) {
         try {
             if (taskExpirationUserNotificationTopicArn != null && taskExpirationAdminNotificationTopicArn != null) {
                 String userEmail = null;
@@ -136,7 +136,7 @@ public class ExpirationQueueHandler implements RequestHandler<SQSEvent, Void> {
                     String userSubject = "Task Expired: " + task.getName();
                     String userMessage = String.format("EXPIRED: Task '%s' (ID: %s) has expired. The deadline was %s.",
                             task.getName(), task.getTaskId(), task.getDeadline());
-                    SnsUtils.sendExpirationEmailNotification(snsClient, taskExpirationUserNotificationTopicArn, userEmail, userSubject, userMessage);
+                    SnsUtils.sendEmailNotification(taskExpirationUserNotificationTopicArn, userEmail, userSubject, userMessage);
                     logger.info("Sent expiration notification to user: {}", task.getUserId());
                 }
 
@@ -145,7 +145,7 @@ public class ExpirationQueueHandler implements RequestHandler<SQSEvent, Void> {
                         String adminSubject = "Admin Alert: " + task.getName();
                         String adminMessage = String.format("Admin Alert: Task '%s' (ID: %s) assigned to user %s has expired. The deadline was %s.",
                                 task.getName(), task.getTaskId(), task.getUserId(), task.getDeadline());
-                        SnsUtils.sendExpirationEmailNotification(snsClient, taskExpirationAdminNotificationTopicArn, adminEmail, adminSubject, adminMessage);
+                        SnsUtils.sendEmailNotification(taskExpirationAdminNotificationTopicArn, adminEmail, adminSubject, adminMessage);
                     }
                     logger.info("Sent expiration notification to {} admins for task: {}", adminEmails.size(), task.getTaskId());
                 } else {
