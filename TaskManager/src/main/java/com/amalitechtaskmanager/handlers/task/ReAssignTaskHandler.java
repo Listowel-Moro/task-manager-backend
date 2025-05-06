@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 import static com.amalitechtaskmanager.utils.ApiResponseUtil.createResponse;
+import static com.amalitechtaskmanager.utils.CheckUserRoleUtil.isUserInAdminGroup;
 import static com.amalitechtaskmanager.utils.SnsUtils.sendEmailNotification;
 
 
@@ -27,6 +28,11 @@ public class ReAssignTaskHandler implements RequestHandler<APIGatewayProxyReques
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent event, Context context) {
         try {
+            String idToken = event.getHeaders().get("Authorization");
+            if (!isUserInAdminGroup(idToken)) {
+                return createResponse(event, 403, "Forbidden - User is not authorized to perform this operation");
+            }
+
             Map<String, Object> body = objectMapper.readValue(event.getBody(), Map.class);
             String taskId = event.getPathParameters().get("taskId");
             String newUserId = (String) body.get("newAssignee");
@@ -60,7 +66,15 @@ public class ReAssignTaskHandler implements RequestHandler<APIGatewayProxyReques
             String previousAssigneeSubject = "Task Reassignment: " + task.getName();
             sendEmailNotification(TASK_ASSIGNMENT_TOPIC_ARN, oldUserId, previousAssigneeSubject, previousAssigneeMessage);
 
-            return createResponse(event, 200, "Task reassigned successfully");
+            Map<String, Object> responseBody = Map.of(
+                    "message", "Task reassigned successfully",
+                    "taskId", task.getTaskId(),
+                    "newAssignee", newUserId,
+                    "oldAssignee", oldUserId
+            );
+            String data = objectMapper.writeValueAsString(responseBody);
+
+            return createResponse(event, 200, data);
 
         } catch (Exception e) {
             e.printStackTrace();
