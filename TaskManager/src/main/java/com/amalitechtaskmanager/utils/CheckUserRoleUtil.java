@@ -1,5 +1,6 @@
 package com.amalitechtaskmanager.utils;
 
+import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -78,4 +79,28 @@ public class CheckUserRoleUtil {
         }
     }
 
+    public static String getCurrentUserEmail(APIGatewayProxyRequestEvent event) {
+        try {
+            if (event == null || event.getRequestContext() == null ||
+                    event.getRequestContext().getAuthorizer() == null) {
+                logger.warning("Request context or authorizer is null");
+                return "";
+            }
+
+            Map<String, Object> authorizer = event.getRequestContext().getAuthorizer();
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> claims = (Map<String, Object>) authorizer.get("claims");
+
+            if (claims == null) {
+                logger.warning("No claims found in authorizer");
+                return "";
+            }
+
+            return (String) claims.get("email");
+        } catch (Exception e) {
+            logger.severe("Error extracting user email: " + e.getMessage());
+            return "";
+        }
+    }
 }
