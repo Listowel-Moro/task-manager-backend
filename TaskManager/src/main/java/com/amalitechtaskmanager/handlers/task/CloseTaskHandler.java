@@ -51,7 +51,7 @@ public class CloseTaskHandler implements RequestHandler<APIGatewayProxyRequestEv
             }
 
             if (!isUserInAdminGroup(idToken)) {
-                return createResponse(event, 403, "Forbidden - User is not authorized to complete this task");
+                return createResponse(event, 403, "Forbidden - User is not authorized to close this task");
             }
 
             task.setStatus(TaskStatus.CLOSED);
