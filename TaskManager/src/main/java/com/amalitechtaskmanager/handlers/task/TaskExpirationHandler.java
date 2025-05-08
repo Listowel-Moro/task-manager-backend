@@ -41,15 +41,31 @@ import software.amazon.awssdk.services.cognitoidentityprovider.model.ListUsersIn
 
 public class TaskExpirationHandler implements RequestHandler<ScheduledEvent, Void> {
 
-    private final ExpirationQueueHandler expirationQueueHandler;
-    private final DynamoDbClient dynamoDbClient;
-    private final SqsClient sqsClient;
-    private final CognitoIdentityProviderClient cognitoClient;
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+    private ExpirationQueueHandler expirationQueueHandler;
+    private DynamoDbClient dynamoDbClient;
+    private SqsClient sqsClient;
+    private CognitoIdentityProviderClient cognitoClient;
+    private ObjectMapper objectMapper = new ObjectMapper();
+    private DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
-    private final String tasksTable;
-    private final String expirationQueueUrl;
+    private String tasksTable;
+    private String expirationQueueUrl;
+
+    /**
+     * Default constructor required by AWS Lambda
+     */
+    public TaskExpirationHandler() {
+        this.expirationQueueHandler = new ExpirationQueueHandler();
+        this.dynamoDbClient = DynamoDbClient.create();
+        this.sqsClient = SqsClient.create();
+        this.cognitoClient = CognitoIdentityProviderClient.create();
+        this.tasksTable = System.getenv("TASKS_TABLE");
+        this.expirationQueueUrl = System.getenv("TASK_EXPIRATION_QUEUE_URL");
+
+        this.objectMapper.registerModule(new JavaTimeModule());
+        this.objectMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
+        this.objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    }
 
     public TaskExpirationHandler(ExpirationQueueHandler expirationQueueHandler) {
         this.expirationQueueHandler = expirationQueueHandler;
