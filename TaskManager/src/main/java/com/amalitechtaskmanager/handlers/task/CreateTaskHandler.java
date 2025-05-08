@@ -83,25 +83,23 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
                 return createResponse(input, 400, "{\"error\": \"Name, deadline, and userId are required\"}");
             }
 
+            // Set createdAt to current time if not provided
+            if (task.getCreatedAt() == null) {
+                task.setCreatedAt(LocalDateTime.now());
+            }
 
-
-            if( task.getDeadline().isBefore(task.getCreatedAt())){
-                return  new APIGatewayProxyResponseEvent().withBody("{\"error\": \"task deadline cannot be before task creation date \"}")
-                        .withStatusCode(433) ;
+            if (task.getDeadline().isBefore(task.getCreatedAt())) {
+                return new APIGatewayProxyResponseEvent()
+                        .withBody("{\"error\": \"task deadline cannot be before task creation date \"}")
+                        .withStatusCode(433);
             }
 
             task.setTaskId(UUID.randomUUID().toString());
             task.setStatus(TaskStatus.OPEN);
             task.setDescription(task.getDescription() != null ? task.getDescription() : "");
 
-
-
-
-            // Store task in DynamoDB
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
             String createdAt = task.getCreatedAt().format(formatter);
-
-
 
             Map<String, AttributeValue> item = new HashMap<>();
             item.put("taskId", AttributeValue.builder().s(task.getTaskId()).build());
@@ -116,6 +114,8 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
                     .tableName(tasksTable)
                     .item(item)
                     .build());
+
+            context.getLogger().log("Task created and sent to dynamodb");
 
             // Send task assignment to SQS
             try {
