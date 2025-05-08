@@ -50,7 +50,7 @@ public class CloseTaskHandler implements RequestHandler<APIGatewayProxyRequestEv
                 return createResponse(event, 404, "Task not found");
             }
 
-            if (!isUserInAdminGroup(idToken) && !task.getUserId().equals(getCurrentUserEmail(event))) {
+            if (!isUserInAdminGroup(idToken)) {
                 return createResponse(event, 403, "Forbidden - User is not authorized to complete this task");
             }
 
