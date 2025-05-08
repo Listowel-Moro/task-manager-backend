@@ -88,6 +88,7 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
                 task.setCreatedAt(LocalDateTime.now());
             }
 
+            // Now we can safely compare dates
             if (task.getDeadline().isBefore(task.getCreatedAt())) {
                 return new APIGatewayProxyResponseEvent()
                         .withBody("{\"error\": \"task deadline cannot be before task creation date \"}")
@@ -98,6 +99,7 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
             task.setStatus(TaskStatus.OPEN);
             task.setDescription(task.getDescription() != null ? task.getDescription() : "");
 
+            // Store task in DynamoDB
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
             String createdAt = task.getCreatedAt().format(formatter);
 
@@ -114,8 +116,6 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
                     .tableName(tasksTable)
                     .item(item)
                     .build());
-
-            context.getLogger().log("Task created and sent to dynamodb");
 
             // Send task assignment to SQS
             try {
