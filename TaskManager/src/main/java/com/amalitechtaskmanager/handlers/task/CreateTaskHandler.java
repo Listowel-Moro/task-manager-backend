@@ -90,9 +90,7 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
 
             // Now we can safely compare dates
             if (task.getDeadline().isBefore(task.getCreatedAt())) {
-                return new APIGatewayProxyResponseEvent()
-                        .withBody("{\"error\": \"task deadline cannot be before task creation date \"}")
-                        .withStatusCode(433);
+                return createResponse(input, 433, "{\"error\": \"task deadline cannot be before task creation date \"}");
             }
 
             task.setTaskId(UUID.randomUUID().toString());
@@ -152,9 +150,7 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
         } catch (Exception e) {
             context.getLogger().log("Error: " + e.getMessage());
             context.getLogger().log("Queue URL: " + taskAssignmentQueue);
-            return new APIGatewayProxyResponseEvent()
-                    .withStatusCode(500)
-                    .withBody("{\"error\": \"" + e.getMessage() + "\"}");
+            return createResponse(input, 500, "{\"error\": \"" + e.getMessage() + "\"}");
         }
     }
 
