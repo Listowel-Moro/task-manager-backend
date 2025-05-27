@@ -83,25 +83,23 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
                 return createResponse(input, 400, "{\"error\": \"Name, deadline, and userId are required\"}");
             }
 
+            // Set createdAt to current time if not provided
+            if (task.getCreatedAt() == null) {
+                task.setCreatedAt(LocalDateTime.now());
+            }
 
-
-            if( task.getDeadline().isBefore(task.getCreatedAt())){
-                return  new APIGatewayProxyResponseEvent().withBody("{\"error\": \"task deadline cannot be before task creation date \"}")
-                        .withStatusCode(433) ;
+            // Now we can safely compare dates
+            if (task.getDeadline().isBefore(task.getCreatedAt())) {
+                return createResponse(input, 433, "{\"error\": \"task deadline cannot be before task creation date \"}");
             }
 
             task.setTaskId(UUID.randomUUID().toString());
             task.setStatus(TaskStatus.OPEN);
             task.setDescription(task.getDescription() != null ? task.getDescription() : "");
 
-
-
-
             // Store task in DynamoDB
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
             String createdAt = task.getCreatedAt().format(formatter);
-
-
 
             Map<String, AttributeValue> item = new HashMap<>();
             item.put("taskId", AttributeValue.builder().s(task.getTaskId()).build());
@@ -152,9 +150,7 @@ public class CreateTaskHandler implements RequestHandler<APIGatewayProxyRequestE
         } catch (Exception e) {
             context.getLogger().log("Error: " + e.getMessage());
             context.getLogger().log("Queue URL: " + taskAssignmentQueue);
-            return new APIGatewayProxyResponseEvent()
-                    .withStatusCode(500)
-                    .withBody("{\"error\": \"" + e.getMessage() + "\"}");
+            return createResponse(input, 500, "{\"error\": \"" + e.getMessage() + "\"}");
         }
     }
 
